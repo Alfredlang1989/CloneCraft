@@ -24,8 +24,9 @@ Danach im Repository:
   ./clonecraft-git.sh push "Commit-Nachricht"
 
 Bedeutung:
-  bootstrap  Vorhandenen, noch nicht von Git verwalteten Quellordner mit
-             Alfredlang1989/CloneCraft verbinden, alles committen und pushen.
+  bootstrap  Vorhandenen CloneCraft-Quellordner mit Alfredlang1989/CloneCraft
+             verbinden, alles committen und pushen. Bestehende Git-Historie
+             wird erhalten.
   clone      Repository erstmalig herunterladen.
   update     Remote-Änderungen holen. Bricht bei lokalen Änderungen ab.
   status     Kurzen Git-Status anzeigen.
@@ -56,26 +57,57 @@ ensure_origin() {
 case "$CMD" in
   bootstrap)
     require_git
+
     if inside_repo; then
-      die "Dieser Ordner ist bereits ein Git-Repository. Benutze 'status', 'update' oder 'push'."
-    fi
+      say "Vorhandenes Git-Repository erkannt; lokale Historie bleibt erhalten."
+      ensure_origin
 
-    say "Initialisiere Git im aktuellen Quellordner ..."
-    git init -b "$BRANCH"
-    ensure_origin
+      # Der Bootstrap soll den kompletten aktuellen Quellbaum übernehmen. Deshalb
+      # werden vorhandene lokale Änderungen zunächst bewusst als eigener Commit gesichert.
+      git add -A
+      if ! git diff --cached --quiet; then
+        git commit -m "Prepare CloneCraft GitHub bootstrap"
+      fi
 
-    # Das GitHub-Repo besitzt bereits einen kleinen Bootstrap-Commit. Wir setzen
-    # HEAD/Index darauf, lassen aber den kompletten vorhandenen Arbeitsbaum unangetastet.
-    say "Hole vorhandene $BRANCH-Historie von GitHub ..."
-    git fetch origin "$BRANCH"
-    git reset --mixed "origin/$BRANCH"
+      git branch -M "$BRANCH"
+      say "Hole vorhandene $BRANCH-Historie von GitHub ..."
+      git fetch origin "$BRANCH"
 
-    say "Übernehme aktuellen CloneCraft-Quellbaum ..."
-    git add -A
-    if git diff --cached --quiet; then
-      say "Keine lokalen Dateien zu übernehmen."
+      if git merge-base HEAD "origin/$BRANCH" >/dev/null 2>&1; then
+        # Gemeinsame Historie: nur Fast-Forward/normalen Stand prüfen. Ein echter
+        # Divergenzfall wird nicht automatisch mit Gewalt überschrieben.
+        if git merge-base --is-ancestor "origin/$BRANCH" HEAD; then
+          :
+        elif git merge-base --is-ancestor HEAD "origin/$BRANCH"; then
+          git merge --ff-only "origin/$BRANCH"
+        else
+          die "Lokale und Remote-Historie sind bereits divergent. Bitte manuell prüfen."
+        fi
+      else
+        # Typischer Erstimport: lokales altes Git und das neue GitHub-Bootstrap-Repo
+        # haben keine gemeinsame Wurzel. 'ours' verbindet nur die Historien; der
+        # lokale CloneCraft-Dateibaum bleibt vollständig unverändert.
+        git merge --allow-unrelated-histories -s ours "origin/$BRANCH" \
+          -m "Attach CloneCraft GitHub repository"
+      fi
     else
-      git commit -m "Import CloneCraft source tree"
+      say "Initialisiere Git im aktuellen Quellordner ..."
+      git init -b "$BRANCH"
+      ensure_origin
+
+      # Das GitHub-Repo besitzt bereits einen kleinen Bootstrap-Commit. Wir setzen
+      # HEAD/Index darauf, lassen aber den kompletten vorhandenen Arbeitsbaum unangetastet.
+      say "Hole vorhandene $BRANCH-Historie von GitHub ..."
+      git fetch origin "$BRANCH"
+      git reset --mixed "origin/$BRANCH"
+
+      say "Übernehme aktuellen CloneCraft-Quellbaum ..."
+      git add -A
+      if git diff --cached --quiet; then
+        say "Keine lokalen Dateien zu übernehmen."
+      else
+        git commit -m "Import CloneCraft source tree"
+      fi
     fi
 
     say "Push nach origin/$BRANCH ..."
