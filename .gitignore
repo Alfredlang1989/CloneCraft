@@ -1,0 +1,42 @@
+# Build output
+build/
+build-*/
+cmake-build-*/
+
+# Object / library artifacts
+*.o
+*.obj
+*.so
+*.so.*
+*.dll
+*.a
+*.lib
+*.exe
+
+# IDE / editor files
+.vscode/
+.idea/
+*.swp
+*.sln
+*.vcxproj*
+compile_commands.json
+.cache/
+
+# Logs and runtime cache
+*.log
+cache/
+
+# Generated world / save data
+worlddata/
+saves/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Static analyzer output
+*.plist
+
+# Python helper cache
+__pycache__/
+*.pyc
