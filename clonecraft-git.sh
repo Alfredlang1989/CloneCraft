@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${CLONECRAFT_REPO_URL:-https://github.com/Alfredlang1989/CloneCraft.git}"
+REPO_URL="${CLONECRAFT_REPO_URL:-git@github.com:Alfredlang1989/CloneCraft.git}"
 BRANCH="${CLONECRAFT_BRANCH:-main}"
 CMD="${1:-help}"
 
