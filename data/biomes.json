@@ -1,0 +1,162 @@
+{
+    "biomes": [
+        {
+            "id": "core:plains",
+            "displayName": "Plains",
+            "surfaceBlock": "core:grass",
+            "fillerBlock": "core:dirt",
+            "temperature": 0.55,
+            "rainfall": 0.48,
+            "continentalness": 0.45,
+            "weight": 3.5,
+            "terrain": {
+                "heightOffset": 0.0,
+                "heightMultiplier": 1.0,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 0.75
+            }
+        },
+        {
+            "id": "core:forest",
+            "displayName": "Temperate Forest",
+            "surfaceBlock": "core:forest_grass",
+            "fillerBlock": "core:dirt",
+            "temperature": 0.5,
+            "rainfall": 0.72,
+            "continentalness": 0.48,
+            "weight": 2.6,
+            "terrain": {
+                "heightOffset": 3.0,
+                "heightMultiplier": 1.05,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 0.9
+            },
+            "terrainMaskField": "forest_mask"
+        },
+        {
+            "id": "core:rolling_hills",
+            "displayName": "Rolling Hills",
+            "surfaceBlock": "core:grass",
+            "fillerBlock": "core:dirt",
+            "temperature": 0.48,
+            "rainfall": 0.55,
+            "continentalness": 0.58,
+            "weight": 2.3,
+            "terrain": {
+                "heightOffset": 12.0,
+                "heightMultiplier": 1.2,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 1.15,
+                "ridgeAmplitude": 48.0,
+                "ridgeScale": 0.003,
+                "ridgeSharpness": 2.4
+            },
+            "terrainMaskField": "rolling_hills_mask"
+        },
+        {
+            "id": "core:desert",
+            "displayName": "Desert",
+            "surfaceBlock": "core:sand",
+            "fillerBlock": "core:sandstone",
+            "temperature": 0.9,
+            "rainfall": 0.1,
+            "continentalness": 0.5,
+            "weight": 1.7,
+            "terrain": {
+                "heightOffset": 2.0,
+                "heightMultiplier": 0.9,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 1.15
+            },
+            "terrainMaskField": "desert_mask"
+        },
+        {
+            "id": "core:badlands",
+            "displayName": "Badlands",
+            "surfaceBlock": "core:red_sand",
+            "fillerBlock": "core:red_sandstone",
+            "temperature": 0.8,
+            "rainfall": 0.3,
+            "continentalness": 0.65,
+            "weight": 1.4,
+            "terrain": {
+                "heightOffset": 18.0,
+                "heightMultiplier": 1.18,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 1.35,
+                "ridgeAmplitude": 70.0,
+                "ridgeScale": 0.0026,
+                "ridgeSharpness": 2.1
+            },
+            "terrainMaskField": "badlands_mask"
+        },
+        {
+            "id": "core:alpine",
+            "displayName": "Alpine Highlands",
+            "surfaceBlock": "core:stone",
+            "fillerBlock": "core:stone",
+            "temperature": 0.3,
+            "rainfall": 0.48,
+            "continentalness": 0.76,
+            "weight": 1.8,
+            "terrain": {
+                "heightOffset": 45.0,
+                "heightMultiplier": 1.5,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 1.6,
+                "ridgeAmplitude": 160.0,
+                "ridgeScale": 0.0018,
+                "ridgeSharpness": 2.7
+            },
+            "terrainMaskField": "alpine_mask"
+        },
+        {
+            "id": "core:desert_high_mountains",
+            "displayName": "Desert High Mountains",
+            "surfaceBlock": "core:sand",
+            "fillerBlock": "core:sandstone",
+            "temperature": 0.88,
+            "rainfall": 0.12,
+            "continentalness": 0.9,
+            "weight": 0.9,
+            "terrain": {
+                "heightOffset": 105.0,
+                "heightMultiplier": 2.0,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 1.9,
+                "ridgeAmplitude": 430.0,
+                "ridgeScale": 0.00128,
+                "ridgeSharpness": 3.0
+            },
+            "terrainMaskField": "desert_high_mountains_mask"
+        },
+        {
+            "id": "core:high_mountains",
+            "displayName": "High Mountains",
+            "surfaceBlock": "core:snow",
+            "fillerBlock": "core:stone",
+            "temperature": 0.16,
+            "rainfall": 0.42,
+            "continentalness": 0.92,
+            "weight": 1.0,
+            "terrain": {
+                "heightOffset": 120.0,
+                "heightMultiplier": 2.2,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 2.0,
+                "ridgeAmplitude": 480.0,
+                "ridgeScale": 0.00128,
+                "ridgeSharpness": 3.1
+            },
+            "terrainMaskField": "high_mountains_mask"
+        }
+    ]
+}

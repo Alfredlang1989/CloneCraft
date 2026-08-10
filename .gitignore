@@ -33,7 +33,6 @@ saves/
 # OS files
 .DS_Store
 Thumbs.db
-
 # Static analyzer output
 *.plist
 

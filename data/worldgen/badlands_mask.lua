@@ -1,0 +1,10 @@
+function sample(seed)
+    local rain=0.5+0.5*noise2(0.00066, 611)
+    local temp=0.5+0.5*noise2(0.00058, 612)
+    local continental=0.5+0.5*noise2(0.00034, 111)
+    local band=0.5+0.5*noise2(0.00115, 621)
+    local warm=math.max(0.0,(temp-0.56)/0.36)
+    local semidry=1.0-math.min(1.0,math.abs(rain-0.38)/0.20)
+    local inland=math.max(0.0,(continental-0.48)/0.38)
+    return warm*semidry*inland*(0.70+band*0.30)
+end

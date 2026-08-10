@@ -1,0 +1,16 @@
+{
+  "crosshair": {
+    "enabled": true,
+    "texture": "ui/crosshair.png",
+    "sizePixels": 20,
+    "opacity": 0.95
+  },
+  "blockSelection": {
+    "enabled": true,
+    "maxDistance": 8.0,
+    "color": "#FFF4C7CC",
+    "thickness": 0.028,
+    "expand": 0.004,
+    "depthTest": false
+  }
+}

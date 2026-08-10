@@ -1,0 +1,84 @@
+#include "debug/DebugHudFormatter.h"
+
+#include <iomanip>
+#include <sstream>
+
+namespace debug
+{
+    std::string formatDebugHud( const DebugHudSnapshot &s )
+    {
+        std::ostringstream out;
+        out.setf( std::ios::fixed );
+        out << std::setprecision( 2 );
+        out << "Clonecraft debug [F5]\n";
+        out << "FPS: " << s.latestFps << "  avg: " << s.averageFps
+            << "  frame: " << s.latestFrameMs << " ms (avg " << s.averageFrameMs << ")\n";
+        out << "Render XYZ: " << s.renderLocalX << " / " << s.renderLocalY << " / " << s.renderLocalZ << "\n";
+        out << "Sector: " << s.sectorX << " / " << s.sectorY << " / " << s.sectorZ << "\n";
+        out << "Region local: " << s.regionX << " / " << s.regionY << " / " << s.regionZ
+            << "  group local: " << s.groupX << " / " << s.groupY << " / " << s.groupZ << "\n";
+        out << "Chunk local: " << s.chunkX << " / " << s.chunkY << " / " << s.chunkZ
+            << "  block local: " << s.blockX << " / " << s.blockY << " / " << s.blockZ
+            << "  sub: " << s.fractionX << " / " << s.fractionY << " / " << s.fractionZ << "\n";
+        if( !s.comparisonGlobalX.empty() )
+            out << "Global block XYZ [TEMP v16 compare]: " << s.comparisonGlobalX << " / "
+                << s.comparisonGlobalY << " / " << s.comparisonGlobalZ << "\n";
+        out << "Render anchor: sector " << s.renderSectorX << " / " << s.renderSectorY << " / " << s.renderSectorZ
+            << "  region " << s.renderRegionX << " / " << s.renderRegionY << " / " << s.renderRegionZ
+            << "  group " << s.renderGroupX << " / " << s.renderGroupY << " / " << s.renderGroupZ
+            << "  edge: " << s.groupEdgeBlocks << " blocks\n";
+
+        if( !s.biomes.empty() )
+        {
+            out << "Biome: " << s.biomes.front().displayName << " (" << s.biomes.front().id << ")\n";
+            out << "Biome weights:" << std::setprecision( 1 );
+            for( const BiomeWeightLine &entry : s.biomes )
+                out << ' ' << entry.displayName << '=' << ( entry.weight * 100.0 ) << '%';
+            out << "\n" << std::setprecision( 2 );
+        }
+
+        if( s.voxelLoaded )
+            out << "Voxel here: " << s.voxelId << " (#" << s.voxelRuntimeId << ")\n";
+        else
+            out << "Voxel here: <unloaded>\n";
+
+        if( s.targetPresent )
+        {
+            out << "Target: " << s.targetDisplayName << " (" << s.targetId << ", #"
+                << s.targetRuntimeId << ")  distance: " << s.targetDistance << " blocks\n";
+            out << "  S " << s.targetSectorX << "/" << s.targetSectorY << "/" << s.targetSectorZ
+                << " R " << s.targetRegionX << "/" << s.targetRegionY << "/" << s.targetRegionZ
+                << " G " << s.targetGroupX << "/" << s.targetGroupY << "/" << s.targetGroupZ
+                << " C " << s.targetChunkX << "/" << s.targetChunkY << "/" << s.targetChunkZ
+                << " B " << s.targetBlockX << "/" << s.targetBlockY << "/" << s.targetBlockZ << "\n";
+            if( !s.targetComparisonGlobalX.empty() )
+                out << "  Global target XYZ [TEMP]: " << s.targetComparisonGlobalX << " / "
+                    << s.targetComparisonGlobalY << " / " << s.targetComparisonGlobalZ << "\n";
+            out << "  solid=" << ( s.targetSolid ? "yes" : "no" )
+                << " opaque=" << ( s.targetOpaque ? "yes" : "no" )
+                << " transparent=" << ( s.targetTransparent ? "yes" : "no" );
+            if( !s.targetTexture.empty() )
+                out << " texture=" << s.targetTexture;
+            out << "\n";
+            if( !s.targetTags.empty() )
+            {
+                out << "  tags:";
+                for( const std::string &tag : s.targetTags )
+                    out << ' ' << tag;
+                out << "\n";
+            }
+        }
+        else
+        {
+            out << "Target: <none within reach>\n";
+        }
+
+        out << "Loaded: " << s.loadedChunks << " chunks / " << s.loadedGroups << " groups"
+            << "  radius: " << s.streamingRadius << "  generated: " << s.generatedChunks
+            << "  evicted: " << s.evictedChunks << "  queued: " << s.queuedChunks
+            << "  ready: " << s.readyChunks << "\n";
+        out << "Look: yaw " << s.yawDegrees << " deg  pitch " << s.pitchDegrees << " deg\n";
+        out << "Flashlight: " << ( s.flashlightEnabled ? "ON" : "OFF" );
+        return out.str();
+    }
+} // namespace debug

@@ -1,0 +1,380 @@
+{
+    "blocks": [
+        {
+            "id": "core:air",
+            "displayName": "Air",
+            "solid": false,
+            "transparent": true,
+            "opaque": false,
+            "emission": 0,
+            "tags": []
+        },
+        {
+            "id": "core:stone",
+            "displayName": "Stone",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#8A8A8C",
+            "roughness": 0.86,
+            "metalness": 0.0,
+            "reflection": 0.035,
+            "tags": [
+                "terrain:rock",
+                "terrain:carvable",
+                "ore:replaceable"
+            ],
+            "texture": "textures/stone.png"
+        },
+        {
+            "id": "core:dirt",
+            "displayName": "Dirt",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#866043",
+            "roughness": 0.96,
+            "metalness": 0.0,
+            "reflection": 0.025,
+            "tags": [
+                "terrain:soil",
+                "terrain:carvable"
+            ],
+            "texture": "textures/dirt.png"
+        },
+        {
+            "id": "core:grass",
+            "displayName": "Grass",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#55983A",
+            "roughness": 0.92,
+            "metalness": 0.0,
+            "reflection": 0.025,
+            "tags": [
+                "terrain:soil",
+                "terrain:carvable"
+            ],
+            "texture": "textures/grass.png"
+        },
+        {
+            "id": "core:sand",
+            "displayName": "Sand",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#E8D889",
+            "roughness": 0.9,
+            "metalness": 0.0,
+            "reflection": 0.03,
+            "tags": [
+                "terrain:sediment",
+                "terrain:carvable"
+            ],
+            "texture": "textures/sand.png"
+        },
+        {
+            "id": "core:water",
+            "displayName": "Water",
+            "solid": false,
+            "transparent": true,
+            "opaque": false,
+            "emission": 0,
+            "color": "#3760D6",
+            "roughness": 0.08,
+            "metalness": 0.0,
+            "reflection": 0.12,
+            "transparency": 0.32,
+            "refraction": 0.08,
+            "indexOfRefraction": 1.333,
+            "receiveShadows": true,
+            "castShadows": false,
+            "tags": [
+                "terrain:fluid"
+            ]
+        },
+        {
+            "id": "core:gravel",
+            "displayName": "Gravel",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#5D6268",
+            "roughness": 0.88,
+            "metalness": 0.0,
+            "reflection": 0.03,
+            "tags": [
+                "terrain:sediment",
+                "terrain:carvable"
+            ],
+            "texture": "textures/gravel.png"
+        },
+        {
+            "id": "core:clay",
+            "displayName": "Clay",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#A87862",
+            "roughness": 0.97,
+            "metalness": 0.0,
+            "reflection": 0.018,
+            "tags": [
+                "terrain:sediment",
+                "terrain:carvable"
+            ],
+            "texture": "textures/clay.png"
+        },
+        {
+            "id": "core:sandstone",
+            "displayName": "Sandstone",
+            "tags": [
+                "terrain:rock",
+                "terrain:carvable",
+                "ore:replaceable"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#C7A66B",
+            "roughness": 0.91,
+            "metalness": 0.0,
+            "reflection": 0.028,
+            "texture": "textures/sandstone.png"
+        },
+        {
+            "id": "core:forest_grass",
+            "displayName": "Forest Grass",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#2F6F35",
+            "roughness": 0.93,
+            "metalness": 0.0,
+            "reflection": 0.024,
+            "tags": [
+                "terrain:soil",
+                "terrain:carvable"
+            ],
+            "texture": "textures/forest_grass.png"
+        },
+        {
+            "id": "core:snow",
+            "displayName": "Snow",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#F2F6FA",
+            "roughness": 0.94,
+            "metalness": 0.0,
+            "reflection": 0.04,
+            "tags": [
+                "terrain:snow",
+                "terrain:carvable"
+            ],
+            "texture": "textures/snow.png"
+        },
+        {
+            "id": "core:red_sand",
+            "displayName": "Red Sand",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#B9663E",
+            "roughness": 0.91,
+            "metalness": 0.0,
+            "reflection": 0.028,
+            "tags": [
+                "terrain:sediment",
+                "terrain:carvable"
+            ],
+            "texture": "textures/red_sand.png"
+        },
+        {
+            "id": "core:red_sandstone",
+            "displayName": "Red Sandstone",
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#9B5035",
+            "roughness": 0.91,
+            "metalness": 0.0,
+            "reflection": 0.028,
+            "tags": [
+                "terrain:rock",
+                "terrain:carvable",
+                "ore:replaceable"
+            ],
+            "texture": "textures/red_sandstone.png"
+        },
+        {
+            "id": "core:tall_grass",
+            "displayName": "Tall Grass",
+            "tags": [
+                "decoration:plant"
+            ],
+            "solid": false,
+            "transparent": false,
+            "opaque": false,
+            "emission": 0,
+            "renderShape": "cross",
+            "texture": "textures/tall_grass.png",
+            "roughness": 0.9,
+            "metalness": 0.0,
+            "reflection": 0.02,
+            "castShadows": false,
+            "alphaMode": "mask",
+            "alphaCutoff": 0.5,
+            "receiveShadows": false
+        },
+        {
+            "id": "core:dandelion",
+            "displayName": "Dandelion",
+            "tags": [
+                "decoration:plant",
+                "decoration:flower"
+            ],
+            "solid": false,
+            "transparent": false,
+            "opaque": false,
+            "emission": 0,
+            "renderShape": "cross",
+            "texture": "textures/dandelion.png",
+            "roughness": 0.88,
+            "metalness": 0.0,
+            "reflection": 0.02,
+            "castShadows": false,
+            "alphaMode": "mask",
+            "alphaCutoff": 0.5,
+            "receiveShadows": false
+        },
+        {
+            "id": "core:poppy",
+            "displayName": "Poppy",
+            "tags": [
+                "decoration:plant",
+                "decoration:flower"
+            ],
+            "solid": false,
+            "transparent": false,
+            "opaque": false,
+            "emission": 0,
+            "renderShape": "cross",
+            "texture": "textures/poppy.png",
+            "roughness": 0.88,
+            "metalness": 0.0,
+            "reflection": 0.02,
+            "castShadows": false,
+            "alphaMode": "mask",
+            "alphaCutoff": 0.5,
+            "receiveShadows": false
+        },
+        {
+            "id": "core:sugar_cane",
+            "displayName": "Sugar Cane",
+            "tags": [
+                "decoration:plant",
+                "decoration:reed"
+            ],
+            "solid": false,
+            "transparent": false,
+            "opaque": false,
+            "emission": 0,
+            "renderShape": "cross",
+            "texture": "textures/sugar_cane.png",
+            "roughness": 0.86,
+            "metalness": 0.0,
+            "reflection": 0.02,
+            "castShadows": false,
+            "alphaMode": "mask",
+            "alphaCutoff": 0.5,
+            "receiveShadows": false
+        },
+        {
+            "id": "core:oak_log",
+            "displayName": "Oak Log",
+            "tags": [
+                "decoration:wood",
+                "terrain:carvable"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "texture": "textures/oak_log.png",
+            "roughness": 0.95,
+            "metalness": 0.0,
+            "reflection": 0.018
+        },
+        {
+            "id": "core:oak_leaves",
+            "displayName": "Oak Leaves",
+            "tags": [
+                "decoration:leaves",
+                "terrain:carvable"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": false,
+            "emission": 0,
+            "texture": "textures/oak_leaves.png",
+            "roughness": 0.9,
+            "metalness": 0.0,
+            "reflection": 0.02,
+            "transparency": 0.0,
+            "alphaMode": "mask",
+            "alphaCutoff": 0.5,
+            "castShadows": false,
+            "receiveShadows": false
+        },
+        {
+            "id": "core:birch_log",
+            "displayName": "Birch Log",
+            "tags": [
+                "decoration:wood",
+                "terrain:carvable"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "texture": "textures/birch_log.png",
+            "roughness": 0.94,
+            "metalness": 0.0,
+            "reflection": 0.018
+        },
+        {
+            "id": "core:birch_leaves",
+            "displayName": "Birch Leaves",
+            "tags": [
+                "decoration:leaves",
+                "terrain:carvable"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": false,
+            "emission": 0,
+            "texture": "textures/birch_leaves.png",
+            "roughness": 0.89,
+            "metalness": 0.0,
+            "reflection": 0.02,
+            "transparency": 0.0,
+            "alphaMode": "mask",
+            "alphaCutoff": 0.5,
+            "castShadows": false,
+            "receiveShadows": false
+        }
+    ]
+}

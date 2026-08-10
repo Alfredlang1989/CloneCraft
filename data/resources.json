@@ -1,0 +1,13 @@
+{
+    "resources": [
+        {
+            "id": "core:gravel_deposit",
+            "displayName": "Gravel Deposit",
+            "blockId": "core:gravel",
+            "weight": 1.0,
+            "minY": 1,
+            "maxY": 40,
+            "chance": 1.0
+        }
+    ]
+}
