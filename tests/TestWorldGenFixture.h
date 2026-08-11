@@ -20,17 +20,19 @@ namespace testfixture
     {
         worldgen::WorldGenConfig c;
         c.seed=1337; c.workerThreads=2; c.surfaceField="height";
+        c.stages.push_back( worldgen::StageConfig{ "terrain", 0 } );
+        c.stages.push_back( worldgen::StageConfig{ "addon", 1 } );
         worldgen::FieldConfig height;
         height.id="height"; height.dimension=worldgen::FieldDimension::D2;
         height.scriptPath=std::filesystem::path(CLONECRAFT_TEST_DATA_DIR)/"simple_height.lua";
         height.functionName="sample"; height.salt=1;
         c.fields.push_back(height);
         worldgen::PassConfig stone;
-        stone.id="stone"; stone.type=worldgen::PassType::FillBelow; stone.blockId="core:stone";
+        stone.id="stone"; stone.type=worldgen::PassType::FillBelow; stone.stage="terrain"; stone.blockId="core:stone";
         stone.field="height"; stone.priority=0;
         c.passes.push_back(stone);
         worldgen::PassConfig top;
-        top.id="top"; top.type=worldgen::PassType::Surface; top.blockId="core:grass";
+        top.id="top"; top.type=worldgen::PassType::Surface; top.stage="terrain"; top.blockId="core:grass";
         top.field="height"; top.priority=10; top.replaceBlocks={"core:stone"};
         c.passes.push_back(top);
         return c;
