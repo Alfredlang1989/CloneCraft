@@ -4,6 +4,7 @@
 #include "world/worldgen/WorldGenConfig.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,9 @@ namespace worldgen
         FieldConfig mConfig;
         std::uint64_t mWorldSeed = 0;
         std::uint64_t mInstanceId = 0;
+        // Thread-local Lua VMs keep only a weak reference. Once this evaluator
+        // dies, the next access on that thread prunes its stale VM.
+        std::shared_ptr<const void> mLifetimeToken;
         std::string mScriptSource;
     };
 } // namespace worldgen
