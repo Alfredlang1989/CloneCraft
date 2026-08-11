@@ -8,11 +8,12 @@ If the file does not exist, Clonecraft creates the directory and writes a comple
 
 ## Schema version 1
 
-The initial file contains four groups:
+The initial file contains five groups:
 
 - `window`: startup resolution, fullscreen and resizable-window state.
 - `world`: 3D chunk streaming/render radius and the main-thread commit budget per update.
 - `camera`: movement speed and mouse-look sensitivity.
+- `debug_hud`: F5 overlay colour (`#RRGGBB` or `#RRGGBBAA`) and font size in pixels.
 - `ogre`: render system/plugin, Ogre log filename, free-form RenderSystem `config_options`, shadow distance, camera clip distances and Forward3D light-grid settings.
 
 `ogre.config_options` is deliberately a string-to-string object. Values are passed to Ogre's selected RenderSystem before window creation. This makes backend-specific options extensible without growing a new C++ field for every Ogre option. Unsupported options are logged and ignored so a driver/backend difference does not make the game unbootable.
@@ -28,3 +29,11 @@ constant. Sky/background colour, ambient/sun parameters, flashlight colour/power
 and detailed PSSM/shadow-map tuning still live in `OgreRenderer.cpp`. Those are the
 main remaining render-settings candidates; block materials and UI selection styling
 are already data-owned elsewhere.
+
+## Debug HUD
+
+The F5 overlay defaults to a bright lilac (`#D070FF`) at 18 px. It renders a single
+text layer without an outline or drop shadow. `font_size_px` is converted to the
+current viewport height, so resizing the window keeps the requested pixel size
+approximately stable. The hierarchical address is rendered as an X/Y/Z table to
+keep Sector, Region, Section, Group, Chunk, Block and Sub values visually aligned.

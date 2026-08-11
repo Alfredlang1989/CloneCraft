@@ -51,6 +51,35 @@ namespace config
             return value;
         }
 
+
+        bool isHexColour( const std::string &value )
+        {
+            if( value.size() != 7u && value.size() != 9u )
+                return false;
+            if( value.front() != '#' )
+                return false;
+            for( std::size_t i = 1; i < value.size(); ++i )
+            {
+                const char c = value[i];
+                const bool digit = c >= '0' && c <= '9';
+                const bool lower = c >= 'a' && c <= 'f';
+                const bool upper = c >= 'A' && c <= 'F';
+                if( !digit && !lower && !upper )
+                    return false;
+            }
+            return true;
+        }
+
+        std::string optionalColour( const json &object, const char *field,
+                                    const std::string &fallback, const char *where )
+        {
+            const std::string value = optionalString( object, field, fallback, where );
+            if( !isHexColour( value ) )
+                throw std::runtime_error( std::string( where ) + "." + field +
+                                          " must be #RRGGBB or #RRGGBBAA" );
+            return value;
+        }
+
         json toJson( const Settings &settings )
         {
             json options = json::object();
@@ -72,6 +101,10 @@ namespace config
                 { "camera", {
                     { "move_speed", settings.camera.moveSpeed },
                     { "mouse_sensitivity", settings.camera.mouseSensitivity }
+                } },
+                { "debug_hud", {
+                    { "color", settings.debugHud.color },
+                    { "font_size_px", settings.debugHud.fontSizePx }
                 } },
                 { "ogre", {
                     { "render_system", settings.ogre.renderSystem },
@@ -139,6 +172,18 @@ namespace config
                                                                0.01, 1000000.0, "settings.camera" );
                 out.camera.mouseSensitivity = boundedNumber<double>(
                     camera, "mouse_sensitivity", out.camera.mouseSensitivity, 0.00001, 1.0, "settings.camera" );
+            }
+
+            if( root.contains( "debug_hud" ) )
+            {
+                const json &hud = root["debug_hud"];
+                if( !hud.is_object() )
+                    throw std::runtime_error( "settings.debug_hud must be an object" );
+                out.debugHud.color = optionalColour( hud, "color", out.debugHud.color,
+                                                     "settings.debug_hud" );
+                out.debugHud.fontSizePx = boundedNumber<float>(
+                    hud, "font_size_px", out.debugHud.fontSizePx, 8.0f, 96.0f,
+                    "settings.debug_hud" );
             }
 
             if( root.contains( "ogre" ) )

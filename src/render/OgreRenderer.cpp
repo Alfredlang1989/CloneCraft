@@ -32,6 +32,7 @@
 #include <Hlms/Pbs/OgreHlmsPbs.h>
 #include <Hlms/Unlit/OgreHlmsUnlit.h>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <stdexcept>
@@ -278,6 +279,11 @@ namespace render
         mOgreConfig = config;
     }
 
+    void OgreRenderer::setDebugHudConfig( const config::DebugHudSettings &config )
+    {
+        mDebugHudConfig = config;
+    }
+
     bool OgreRenderer::initialize( const platform::NativeWindowInfo &nativeInfo )
     {
         try
@@ -379,6 +385,8 @@ namespace render
             core::logError( std::string( "Ogre window creation failed: " ) + e.getFullDescription() );
             return false;
         }
+
+        mViewportHeight = std::max( nativeInfo.heightPx, 1 );
 
         mSceneManager = mRoot->createSceneManager( "DefaultSceneManager", /*numWorkerThreads*/ 0 );
 
@@ -583,7 +591,7 @@ namespace render
             // detailed resource/font stage has already been logged once.
             mDebugOverlayInitAttempted = true;
             auto overlay = std::make_unique<DebugOverlay>();
-            if( overlay->initialize() )
+            if( overlay->initialize( mDebugHudConfig, mViewportHeight ) )
                 mDebugOverlay = std::move( overlay );
         }
 
@@ -645,8 +653,11 @@ namespace render
         mWindow->windowMovedOrResized();
         if( mCamera )
             mCamera->setAutoAspectRatio( true );
+        mViewportHeight = std::max( height, 1 );
         if( mCrosshairOverlay )
             mCrosshairOverlay->setViewportSize( width, height );
+        if( mDebugOverlay )
+            mDebugOverlay->setViewportHeight( mViewportHeight );
         core::logInfo( "Ogre window resized to " + std::to_string( width ) + "x" +
                        std::to_string( height ) );
     }

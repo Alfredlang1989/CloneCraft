@@ -1,6 +1,7 @@
 #include "render/DebugOverlay.h"
 
 #include "core/Logging.h"
+#include "config/Settings.h"
 
 #include <OgreColourValue.h>
 #include <OgreException.h>
@@ -12,6 +13,7 @@
 #include <OgreOverlayManager.h>
 #include <OgreTextAreaOverlayElement.h>
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <string>
@@ -34,7 +36,7 @@ namespace
      * construct a font from an already installed system TTF. We never install
      * fonts and never copy them into the project.
      */
-    std::string ensureDebugFont()
+    std::string ensureDebugFont( float fontSizePx )
     {
         Ogre::FontManager &fonts = Ogre::FontManager::getSingleton();
 
@@ -148,7 +150,7 @@ namespace
         Ogre::FontPtr font = fonts.create( DEBUG_FONT_NAME, sourceGroup );
         font->setType( Ogre::FT_TRUETYPE );
         font->setSource( source );
-        font->setTrueTypeSize( 16.0f );
+        font->setTrueTypeSize( fontSizePx );
         font->setTrueTypeResolution( 96u );
         font->clearCodePointRanges();
         font->addCodePointRange( Ogre::Font::CodePointRange( 32u, 126u ) );
@@ -159,16 +161,38 @@ namespace
         font->load();
         return DEBUG_FONT_NAME;
     }
+
+    unsigned hexNibble( char c )
+    {
+        if( c >= '0' && c <= '9' ) return static_cast<unsigned>( c - '0' );
+        if( c >= 'a' && c <= 'f' ) return static_cast<unsigned>( c - 'a' + 10 );
+        return static_cast<unsigned>( c - 'A' + 10 );
+    }
+
+    float hexByte( const std::string &value, std::size_t offset )
+    {
+        const unsigned byte = ( hexNibble( value[offset] ) << 4u ) |
+                              hexNibble( value[offset + 1u] );
+        return static_cast<float>( byte ) / 255.0f;
+    }
+
+    Ogre::ColourValue parseHudColour( const std::string &value )
+    {
+        const float alpha = value.size() == 9u ? hexByte( value, 7u ) : 1.0f;
+        return { hexByte( value, 1u ), hexByte( value, 3u ),
+                 hexByte( value, 5u ), alpha };
+    }
 } // namespace
 
 namespace render
 {
-    bool DebugOverlay::initialize()
+    bool DebugOverlay::initialize( const config::DebugHudSettings &settings, int viewportHeight )
     {
         try
         {
+            mFontSizePx = settings.fontSizePx;
             core::logInfo( "Debug HUD init: resolving font" );
-            const std::string fontName = ensureDebugFont();
+            const std::string fontName = ensureDebugFont( mFontSizePx );
             if( fontName.empty() )
                 return false;
 
@@ -180,21 +204,11 @@ namespace render
                 manager.createOverlayElement( "Panel", "Clonecraft/DebugPanel" ) );
             mText = static_cast<Ogre::v1::TextAreaOverlayElement *>(
                 manager.createOverlayElement( "TextArea", "Clonecraft/DebugText" ) );
-            mShadow = static_cast<Ogre::v1::TextAreaOverlayElement *>(
-                manager.createOverlayElement( "TextArea", "Clonecraft/DebugTextShadow" ) );
-
-            constexpr Ogre::Real charHeight = 0.021f;
             mText->setFontName( fontName );
-            mText->setCharHeight( charHeight );
-            mText->setColour( Ogre::ColourValue::White );
+            mText->setColour( parseHudColour( settings.color ) );
             mText->setPosition( 0.008f, 0.010f );
+            setViewportHeight( viewportHeight );
 
-            mShadow->setFontName( fontName );
-            mShadow->setCharHeight( charHeight );
-            mShadow->setColour( Ogre::ColourValue( 0.0f, 0.0f, 0.0f, 0.92f ) );
-            mShadow->setPosition( 0.0095f, 0.0120f );
-
-            mPanel->addChild( mShadow );
             mPanel->addChild( mText );
             mOverlay->add2D( mPanel );
             mOverlay->hide();
@@ -210,7 +224,6 @@ namespace render
             mOverlay = nullptr;
             mPanel = nullptr;
             mText = nullptr;
-            mShadow = nullptr;
             mVisible = false;
             return false;
         }
@@ -220,10 +233,18 @@ namespace render
             mOverlay = nullptr;
             mPanel = nullptr;
             mText = nullptr;
-            mShadow = nullptr;
             mVisible = false;
             return false;
         }
+    }
+
+    void DebugOverlay::setViewportHeight( int viewportHeight )
+    {
+        if( !mText )
+            return;
+        const int safeHeight = std::max( viewportHeight, 1 );
+        mText->setCharHeight( static_cast<Ogre::Real>( mFontSizePx /
+                                                       static_cast<float>( safeHeight ) ) );
     }
 
     void DebugOverlay::setVisible( bool visible )
@@ -239,9 +260,8 @@ namespace render
 
     void DebugOverlay::setText( const std::string &text )
     {
-        if( !mText || !mShadow )
+        if( !mText )
             return;
         mText->setCaption( text );
-        mShadow->setCaption( text );
     }
 } // namespace render

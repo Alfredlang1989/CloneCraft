@@ -39,6 +39,8 @@ TEST_CASE(settings_missing_file_is_created_with_defaults)
     CHECK_EQ( settings.window.height, 720 );
     CHECK_EQ( settings.world.chunkRenderDistance, 3 );
     CHECK( settings.ogre.configOptions.at( "sRGB Gamma Conversion" ) == "Yes" );
+    CHECK( settings.debugHud.color == "#D070FF" );
+    CHECK( settings.debugHud.fontSizePx == 18.0f );
 }
 
 TEST_CASE(settings_custom_values_are_loaded)
@@ -51,6 +53,7 @@ TEST_CASE(settings_custom_values_are_loaded)
       "window": {"width": 1920, "height": 1080, "fullscreen": true, "resizable": false},
       "world": {"chunk_render_distance": 7, "chunk_commits_per_update": 12},
       "camera": {"move_speed": 77.5, "mouse_sensitivity": 0.004},
+      "debug_hud": {"color": "#AA55EE", "font_size_px": 21},
       "ogre": {
         "render_system": "OpenGL 3+ Rendering Subsystem",
         "render_system_plugin": "RenderSystem_GL3Plus",
@@ -71,6 +74,8 @@ TEST_CASE(settings_custom_values_are_loaded)
     CHECK_EQ( settings.world.chunkRenderDistance, 7 );
     CHECK_EQ( settings.world.chunkCommitsPerUpdate, std::size_t{ 12 } );
     CHECK( settings.camera.moveSpeed == 77.5 );
+    CHECK( settings.debugHud.color == "#AA55EE" );
+    CHECK( settings.debugHud.fontSizePx == 21.0f );
     CHECK( settings.ogre.configOptions.at( "VSync" ) == "No" );
     CHECK( settings.ogre.forward3d.width == 8u );
     CHECK( settings.ogre.cameraFarClip == 2500.0f );
@@ -104,6 +109,8 @@ TEST_CASE(settings_save_roundtrip)
     original.window.height = 1440;
     original.world.chunkRenderDistance = 5;
     original.camera.mouseSensitivity = 0.00325;
+    original.debugHud.color = "#C080FFCC";
+    original.debugHud.fontSizePx = 22.0f;
     original.ogre.configOptions["Some Future Ogre Option"] = "Fancy";
     config::saveSettings( path, original );
 
@@ -112,7 +119,29 @@ TEST_CASE(settings_save_roundtrip)
     CHECK_EQ( loaded.window.height, 1440 );
     CHECK_EQ( loaded.world.chunkRenderDistance, 5 );
     CHECK( loaded.camera.mouseSensitivity == 0.00325 );
+    CHECK( loaded.debugHud.color == "#C080FFCC" );
+    CHECK( loaded.debugHud.fontSizePx == 22.0f );
     CHECK( loaded.ogre.configOptions.at( "Some Future Ogre Option" ) == "Fancy" );
+}
+
+TEST_CASE(settings_reject_invalid_debug_hud_colour)
+{
+    const auto path = freshPath( "invalid-hud-colour" );
+    std::filesystem::create_directories( path.parent_path() );
+    std::ofstream out( path );
+    out << R"({"debug_hud":{"color":"purple-ish"}})";
+    out.close();
+
+    bool rejected = false;
+    try
+    {
+        (void)config::loadOrCreateSettings( path );
+    }
+    catch( const std::runtime_error & )
+    {
+        rejected = true;
+    }
+    CHECK( rejected );
 }
 
 int main() { return test::runAll(); }

@@ -61,6 +61,7 @@ namespace app
         mRenderer = std::make_unique<render::OgreRenderer>();
         mRenderer->setCrosshairConfig( mUiConfig.crosshair );
         mRenderer->setOgreConfig( mSettings.ogre );
+        mRenderer->setDebugHudConfig( mSettings.debugHud );
         platform::NativeWindowInfo nativeInfo;
         if( !mPlatform->getNativeWindowInfo( nativeInfo ) ) return false;
         if( !mRenderer->initialize( nativeInfo ) ) { core::logError( "Renderer initialization failed" ); return false; }

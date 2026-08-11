@@ -58,6 +58,7 @@ namespace render
 
         /** Set before initialize(); user/runtime renderer settings from settings.json. */
         void setOgreConfig( const config::OgreSettings &config );
+        void setDebugHudConfig( const config::DebugHudSettings &config );
 
         bool initialize( const platform::NativeWindowInfo &nativeInfo );
         void renderFrame();
@@ -106,6 +107,8 @@ namespace render
         Ogre::v1::OverlaySystem *mOverlaySystem = nullptr;
         ui::CrosshairConfig mCrosshairConfig;
         config::OgreSettings mOgreConfig;
+        config::DebugHudSettings mDebugHudConfig;
+        int mViewportHeight = 720;
         std::unique_ptr<CrosshairOverlay> mCrosshairOverlay;
         std::unique_ptr<DebugOverlay> mDebugOverlay;
         bool mFlashlightEnabled = true;

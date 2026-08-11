@@ -2,6 +2,11 @@
 
 #include <string>
 
+namespace config
+{
+    struct DebugHudSettings;
+}
+
 namespace Ogre
 {
     namespace v1
@@ -19,8 +24,8 @@ namespace render
      *
      * The overlay is intentionally presentation-only: Application assembles the
      * diagnostic values, while this class only owns the Ogre Overlay elements.
-     * A black offset copy is rendered behind the white text so it remains readable
-     * over both sky and terrain without requiring a full UI framework.
+     * Colour and size come from runtime settings. The overlay deliberately renders
+     * one clean text layer without an outline/shadow copy.
      */
     class DebugOverlay
     {
@@ -31,8 +36,9 @@ namespace render
         DebugOverlay( const DebugOverlay & ) = delete;
         DebugOverlay &operator=( const DebugOverlay & ) = delete;
 
-        bool initialize();
+        bool initialize( const config::DebugHudSettings &settings, int viewportHeight );
         void setVisible( bool visible );
+        void setViewportHeight( int viewportHeight );
         bool isVisible() const { return mVisible; }
         void setText( const std::string &text );
 
@@ -40,7 +46,7 @@ namespace render
         Ogre::v1::Overlay *mOverlay = nullptr;
         Ogre::v1::OverlayContainer *mPanel = nullptr;
         Ogre::v1::TextAreaOverlayElement *mText = nullptr;
-        Ogre::v1::TextAreaOverlayElement *mShadow = nullptr;
+        float mFontSizePx = 18.0f;
         bool mVisible = false;
     };
 } // namespace render

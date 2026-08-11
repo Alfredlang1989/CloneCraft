@@ -39,6 +39,12 @@ namespace config
         float maxDistance = 120.0f;
     };
 
+    struct DebugHudSettings
+    {
+        std::string color = "#D070FF";
+        float fontSizePx = 18.0f;
+    };
+
     struct OgreSettings
     {
         std::string renderSystem = "OpenGL 3+ Rendering Subsystem";
@@ -59,6 +65,7 @@ namespace config
         WindowSettings window;
         WorldSettings world;
         CameraSettings camera;
+        DebugHudSettings debugHud;
         OgreSettings ogre;
     };
 
