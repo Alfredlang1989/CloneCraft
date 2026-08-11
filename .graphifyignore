@@ -1,0 +1,21 @@
+# CloneCraft Graphify scope.
+# Same pattern semantics as .gitignore. This file only excludes additional paths.
+
+# Build products and local tool environments
+build/
+build-*/
+cmake-build-*/
+.tools/
+graphify-out/
+
+# Vendored dependencies are not CloneCraft architecture
+third_party/
+
+# Runtime/generated data
+worlddata/
+saves/
+cache/
+
+# Ogre-generated shader dumps in the repository root
+/[0-9]*PixelShader_ps.glsl
+/[0-9]*VertexShader_vs.glsl
