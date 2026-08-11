@@ -1,5 +1,3 @@
-        };
-
         GroupAxisDivision divideGroupAxis( Axis axis, std::int64_t divisor )
         {
             if( divisor <= 0 ) throw std::invalid_argument( "macro cell divisor must be positive" );
