@@ -34,11 +34,14 @@ namespace worldgen
         Volume
     };
 
-    /** Hard ordering boundary for terrain mutation. Priority is scoped to a stage. */
-    enum class PassStage : std::uint8_t
+    /**
+     * Data-defined ordering boundary for block-mutating worldgen passes.
+     * Stage names and their global order are loaded from stage.json.
+     */
+    struct StageConfig
     {
-        Terrain, // base stone, soil, biome caps and other initial land construction
-        Addon    // caves, rivers, tunnels, sediment replacement and other terrain modifiers
+        std::string id;
+        std::int32_t order = 0;
     };
 
     enum class CompareOp : std::uint8_t
@@ -62,7 +65,7 @@ namespace worldgen
     {
         std::string id;
         PassType type = PassType::Volume;
-        PassStage stage = PassStage::Terrain;
+        std::string stage;
         std::string blockId;
         std::int32_t priority = 0;
 
@@ -82,7 +85,7 @@ namespace worldgen
     };
 
     // ---------------------------------------------------------------------
-    // Decoration runtime. Runs after the complete terrain -> addon merge.
+    // Decoration runtime. Runs after all configured block-mutation stages.
     // ---------------------------------------------------------------------
     struct AnchorConditionConfig
     {
@@ -93,7 +96,7 @@ namespace worldgen
     enum class AnchorSurfaceMode : std::uint8_t
     {
         Field,       // y comes directly from surfaceField
-        Postprocess  // snap onto the final terrain+addon surface
+        Postprocess  // snap onto the final post-mutation surface
     };
 
     /**
@@ -133,8 +136,8 @@ namespace worldgen
     };
 
     /**
-     * Post-addon decoration proposal producer. Like terrain/addon passes, decoration
-     * passes never mutate another pass and are deterministically merged later.
+     * Post-mutation decoration proposal producer. Like mutation passes, decoration
+     * passes never mutate another producer and are deterministically merged later.
      */
     struct DecorationPassConfig
     {
@@ -171,6 +174,8 @@ namespace worldgen
         std::uint64_t seed = 0;
         std::uint32_t workerThreads = 0;
         std::string surfaceField = "surface_height";
+        std::filesystem::path stageRegistryPath;
+        std::vector<StageConfig> stages;
         std::vector<FieldConfig> fields;
         std::vector<PassConfig> passes;
         std::vector<AnchorSetConfig> anchorSets;
