@@ -69,7 +69,7 @@
                         throw std::invalid_argument( "biome '" + biome.id +
                                                      "' terrainMaskField must be 2D" );
                     runtime.maskField = maskIt->second;
-                    biomeTerrains.push_back( std::move( runtime ) );
+                    biomeTerrains.push_back( runtime );
                 }
 
                 if( !fallbackTerrain.has_value() )
@@ -77,7 +77,7 @@
                     RuntimeBiomeTerrain fallback;
                     fallback.terrain = world::BiomeTerrainDef{};
                     fallback.salt = stableStringSalt( "<implicit-default>" );
-                    fallbackTerrain = std::move( fallback );
+                    fallbackTerrain = fallback;
                 }
             }
 
