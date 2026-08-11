@@ -48,6 +48,7 @@ namespace worldgen
 
         std::uint32_t workerThreads() const;
         std::size_t fieldCount() const;
+        std::size_t stageCount() const;
         std::size_t passCount() const;
         std::size_t anchorSetCount() const;
         std::size_t decorationPassCount() const;
