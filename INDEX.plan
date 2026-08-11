@@ -1,180 +1,70 @@
 # INDEX.plan
 
 PROJECT
-Modular 3D voxel sandbox engine. SDL3 owns window/input; OgreNext renders;
-JSON content; OpenSimplex worldgen; planned Jolt physics + Lua mod behaviour.
-World coordinates are hierarchical and cubic in X/Y/Z.
+CloneCraft: modular C++20 3D voxel sandbox. SDL3 owns window/input; OgreNext
+renders; JSON/Lua own content/worldgen; Jolt physics is planned.
 
 READ FIRST ON EVERY AGENT RUN
 1. INDEX.plan
 2. docs/STATUS.md
-3. docs/CODE_REVIEW_V10.md
-4. docs/CODE_AUDIT.md
-5. docs/ARCHITECTURE.md
-6. docs/DATA_DRIVEN_AUDIT.md
-7. docs/STATIC_ANALYSIS.md
-8. git status
-9. git log --oneline -10
-
-GIT STATE WARNING
-The uploaded prototype already contains uncommitted work after milestone 05.
-Do not reset, clean, or blindly commit the whole tree. Preserve user changes.
-Current clean HEAD: 64ccc7d (milestone 05).
-Last existing tag: milestone-04-worldgen.
+3. docs/ARCHITECTURE.md
+4. docs/COORDINATES.md
+5. docs/DYNAMIC_SPACE.md
+6. docs/PHASE2_VALIDATION.md
+7. docs/DATA_DRIVEN_AUDIT.md
+8. docs/STATIC_ANALYSIS.md
+9. git status
+10. git log --oneline -10
 
 BUILD
-Preferred one-command analysis + build + tests:
-  ./compile.sh
-Static/architecture analysis only:
-  ./compile.sh --analyze-only
-Release:
-  ./compile.sh --release
-Experimental chunk/group sizes:
-  ./compile.sh --chunk 32 --group 16 --clean
-Build, test and run:
-  ./compile.sh --run
+Preferred gate: `./compile.sh`
+Architecture only: `python3 tools/architecture_check.py --root .`
+Headless dependency-light validation: configure with `-DCLONECRAFT_BUILD_APP=OFF`.
+Do not install/modify OS packages from an autonomous coding run.
 
-Manual fallback:
-  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-  cmake --build build --parallel
-  ctest --test-dir build --output-on-failure
+PHASE-2 COORDINATE INVARIANTS
+- Persistent world identity is Sector -> Region -> Section -> ChunkGroup -> Chunk -> Block.
+- Default radices: Sector signed int64; Regions/Sector=9e18; Sections/Region=9e18;
+  Groups/Section=256; Chunks/Group=16; Blocks/Chunk=16.
+- A Section is 65,536 blocks per axis but is a logical sparse locality tier.
+- Never flatten global Block/Chunk/Group/Section coordinates into one integer or double.
+- Carry/borrow is checked digit-by-digit and outer Sector overflow never wraps.
+- Worldgen, chunk storage, streaming and meshing use the hierarchical integer world only.
+- Dynamic float objects use `spatial.dynamic`, not world coordinates directly.
+- `spatial.bridge.WorldDynamicBridge` is the explicit world <-> DynamicSpace boundary.
+- Default DynamicSpace edge is 65,536 blocks and is independent of Section radix.
+- Player/NPC/vehicle/future Jolt bodies in one active island must share one DynamicSpace
+  and receive rebases transactionally.
+- Jolt active simulation radius is independent from DynamicSpace edge.
+- Ogre render anchor is independent and may rebase much more frequently.
+- ChunkGroup != Jolt PhysicsSystem.
 
-For autonomous/local coding agents: do not install or modify OS packages. If a
-system dependency is missing, stop and report it. Project-local third_party
-clones/builds are allowed. This restriction is an agent safety rule, not a
-limitation of external build/test harnesses explicitly authorized by the user.
+OTHER ARCHITECTURE INVARIANTS
+- SDL3 owns native window/event polling. No SDL_Renderer.
+- OgreNext is the only renderer.
+- Chunks are cubic 3D chunks; X/Y/Z are equal peers.
+- ChunkGroups are sparse materialized containers, never dense super-world slabs.
+- AIR runtime id 0 does not mean unloaded chunk.
+- Worldgen remains deterministic and data-driven.
+- No concrete geology/material semantics in generic WorldGen C++.
 
 MANDATORY END-OF-RUN GATE
-- python3 tools/architecture_check.py --root .
-- normal completion: ./compile.sh (includes clang-tidy + build + tests)
-- never claim DONE if architecture/static analysis/build/tests have not run;
-- if clang-tidy or another required system tool is missing, STOP and report it; do not install it.
-
-ARCHITECTURE INVARIANTS
-- SDL3 owns native window and event polling. NO SDL_Renderer.
-- OgreNext is attached to SDL's window and is the only renderer.
-- ESC and window close must always produce a clean normal shutdown.
-- Chunks are cubic 3D chunks; X/Y/Z are equal peers.
-- Chunk edge and group edge are compile-time experiment knobs (16 or 32 etc.).
-- ChunkGroups are sparse coordinate/world regions, never dense voxel slabs.
-- AIR=runtime block id 0, but loaded AIR != unloaded chunk.
-- Continuous positions are ALWAYS hierarchical: GroupCoord int64 + local cell int32 + sub-block float.
-- Ogre/physics backends only receive coordinates relative to a nearby integer anchor; never absolute world floats.
-- Group ownership is sticky/hysteretic, never nearest-centre flipping.
-- ChunkGroup != Jolt PhysicsSystem.
-- Worldgen is deterministic, data-driven, and preserves full 64-bit block/chunk ownership; Lua receives exact int64 coordinates before script scaling.
-- Block visuals/materials are JSON-driven: texture -> color -> diagnostic fallback; PBS roughness/reflection/transparency/normal maps/shadow flags live in JSON.
-- Greedy meshes use local repeat UVs; do not reintroduce packed-atlas TAM_WRAP.
-
-CURRENT RENDER PATH
-Greedy mesh -> quads carry BlockId -> one ManualObject material section per block
-type -> individual repeatable block texture/material. This replaced the broken
-packed atlas that caused the screenshot texture confetti. Empty chunks skip
-meshing in O(1), and intra-chunk visibility checks read dense voxels directly.
-Prototype sky clear colour is daylight blue #78A7FF. Terrain now uses HLMS PBS with a directional sun, stronger hemispherical ambient fill, PSSM shadows, JSON PBR properties and tangent-space normal-map support. A camera-mounted flashlight is enabled by default and toggled with F; Forward3D is enabled for local non-shadowed lights.
-
-CONTENT DATA
-- data/blocks.json: block mechanics + texture/color visual fields + semantic worldgen tags
-- data/biomes.json: biome metadata + ACTIVE terrain profiles/mask bindings; surface/filler/resource metadata are not material-generation switches
-- data/resources.json: legacy resource metadata (future ore passes are Lua+JSON field/pass data)
-- data/worldgen.json: Lua scalar-field declarations + staged terrain/addon passes + decoration anchors/passes
-- data/worldgen/*.lua: 2D/3D terrain/river/cave scalar fields + bounded decoration scripts
-See docs/REGISTRY.md and docs/WORLDGEN.md.
-
-CURRENT WORLDGEN
-- active C++ worldgen is a generic field/pass runtime; it has no Stone/Dirt/Cave material rules;
-- Lua 5.4 owns 2D/3D scalar fields and can call deterministic native noise2/noise3 helpers;
-- shipped default graph currently has 30 Lua fields, 13 terrain passes, 16 addon passes, 4 anchor sets and 8 decoration passes;
-- generic terrain operators: fill_below, surface_layer, surface, volume;
-- biome terrain height is blended from `data/biomes.json` using data-defined mask fields;
-- rivers are active generic 2D-field/pass content: continuous U/V valley profile, fixed Y=0 water reference, mountain tunnels and post-cave bed/foundation sealing;
-- vegetation/trees are active data-driven decorations using scatter/column/bounded Lua structure passes;
-- fields and proposal-producing passes run in parallel; merge barriers are hard-ordered terrain -> addons -> decoration, with priority then JSON order only inside each stage;
-- block semantic tags drive generic replacement rules (`terrain:rock`, `terrain:carvable`, etc.);
-- caves are generic `core:air` volume proposals in the addon stage; rivers/tunnels/sealing are addon passes too;
-- one requested cubic chunk only; negative Y and unrestricted positive Y work;
-- active streaming window remains cubic X/Y/Z;
-- beaches and richer ore/resource morphology remain future content layers.
-See docs/WORLDGEN.md.
-
-KNOWN HIGH-PRIORITY GAPS
-- huge-coordinate camera/render rebasing is implemented; keep the WorldPosition + render-anchor invariant intact;
-- no Jolt yet;
-- runFrameUpdate currently uses variable dt for camera, real fixed-step accumulator pending;
-- per-block material sections are correctness-first, not final draw-call optimisation;
-- dedicated ore/resource passes are not populated yet; the runtime already supports them as generic 3D volume passes;
-- chunk generation is asynchronous on a background streaming coordinator and WorldGen has its own persistent field worker pool; ready-chunk commits and Ogre mesh/upload work are still main-thread budgeted, so further parallel/bounded pipeline scaling remains useful;
-- user window size/fullscreen, camera speed/sensitivity, chunk render distance, commit budget, Ogre backend/options, clip distances, shadow distance and Forward3D are persisted in `~/.config/Clonecraft/settings.json`;
-- sky/ambient/sun/flashlight/PSSM tuning still contains renderer-side constants and is the main remaining render-settings data-ownership gap.
+- `python3 tools/architecture_check.py --root .`
+- normal completion: `./compile.sh` when target system dependencies are present
+- never claim the graphical target built if SDL3/OgreNext were unavailable
+- never install missing system dependencies automatically
 
 IMPORTANT FILES
-src/app/Application.*                 application lifetime/main loop
-src/input/InputManager.*              SDL event/input state
-src/platform/PlatformWindowBridge.*   SDL native window bridge
-src/render/OgreRenderer.*             Ogre root/window/camera/light/overlay backend
-src/render/DebugOverlay.*             F5 top-left diagnostic text presentation
-src/debug/DebugHudFormatter.*         renderer-independent HUD formatting
-src/render/ChunkWorldRenderer.*        chunk GPU rendering + block visuals
-src/world/coordinates/*               hierarchy + sticky group anchor
-src/world/chunk/*                     sparse groups/chunks + 3D streaming
-src/world/mesh/*                      visibility + greedy mesh
-src/world/registry/*                  strict JSON registries/runtime block ids
-src/world/worldgen/*                  generic Lua field/pass runtime + mapped OpenSimplex noise
-tools/architecture_check.py           module/include architecture gate
-tools/run_static_analysis.py          clang-tidy compile-database runner
-tools/architecture_rules.json         data-driven dependency policy
+src/world/coordinates/*                 exact hierarchical block world
+src/spatial/dynamic/*                   local float DynamicSpace
+src/spatial/bridge/*                    only world/dynamic translation boundary
+src/camera/*                            DynamicSpace-local free camera
+src/world/worldgen/*                    generic Lua field/pass worldgen runtime
+src/world/chunk/*                       sparse chunks/groups + streaming
+src/render/*                            Ogre-local rendering
+src/app/Application.*                   subsystem wiring/rebase transaction
+tools/architecture_rules.json           dependency firewall
 
-docs/BUILD.md                         build helper usage + dependency policy
-docs/PERFORMANCE.md                   measured A/B CPU optimisation results
-docs/TARGET_BUILD_ENVIRONMENT.md       authoritative real-machine toolchain fingerprint
-docs/CODE_AUDIT.md                    historical repair audit; resolved/current deltas are annotated
-docs/CODE_REVIEW_V10.md               historical v10 review; current deltas are annotated
-docs/DATA_DRIVEN_AUDIT.md             current AST/data-ownership audit
-docs/STATIC_ANALYSIS.md               clang-tidy + architecture gate policy
-docs/REGISTRY.md                      visual/data schema
-docs/MATERIALS.md                     PBS block material schema / refraction status
-docs/RENDERER.md                      current rendering path
-docs/DEBUG_HUD.md                     F5 diagnostics, fields and coordinate meaning
-docs/WORLDGEN.md                      current generator behaviour
-docs/COORDINATES.md                   coordinate rules
-docs/HUGE_WORLD_COORDINATES.md        hard floating-origin / precision invariant
-docs/STATUS.md                        current working state
-
-NEXT LOGICAL TASK
-Run `./compile.sh --clean` on the target Ubuntu machine. The normal path requires
-clang-tidy, Lua 5.4 and the renderer dependencies (nlohmann/json is vendored in-tree), and runs
-architecture + AST/static analysis before build/tests. The active staged graph is terrain -> addons (caves/rivers/tunnels/sealing) -> decorations.
-The next content layers are beaches and richer ore/resource morphology; the next
-scaling task remains continued bounded async generation/meshing/upload work.
-
-RUNTIME FIX AFTER PBR V4
-- Target log exposed incomplete PBS HLMS shader-library registration.
-- OgreNext PBS paths now come from HlmsPbs::getDefaultPaths(); do not hand-maintain them.
-- Generated JSON-colour textures are ManualTexture and bound to PBS by TextureGpu pointer.
-- Tangents are only submitted for materials that actually use normalMap.
-- Runtime std::exceptions are caught in main so renderer failures shut down cleanly instead of std::terminate.
-
-RUNTIME HOTFIX V6
-- HLMS default paths are resolved relative to Ogre Media root, not Media/Hlms.
-- HLMS initialization exceptions are caught and return a clean initialization failure.
-
-
-LIGHTING FOLLOW-UP V7
-- Target screenshot showed ambient fill was too weak.
-- Ambient upper/lower hemisphere values increased.
-- Camera flashlight added, default ON, F toggles it.
-- Forward3D enabled for local PBS lights.
-- Flashlight currently does not cast its own shadow map.
-
-
-RUNTIME MATERIAL NOTE
-PBS is linear-light. Ogre render window must use `sRGB Gamma Conversion=Yes`.
-JSON solid colours are converted sRGB -> linear and sent directly to PBS background diffuse.
-Diffuse texture files are loaded as sRGB; normal maps are linear.
-
-
-DEBUG HUD V9
-- F5 toggles top-left runtime diagnostics.
-- Shows exact position group/local-cell/sub-block fractions, render-anchor local XYZ + origin block, block/chunk coords, biome weights, FPS/frame time, streaming counts, current voxel, yaw/pitch and flashlight.
-- Update cadence is 200 ms; do not move biome/string formatting into the per-frame render hot path.
-- Uses OGRE-Next-Overlay and requires HLMS Unlit in addition to terrain PBS.
+docs/COORDINATES.md                     Phase-2 world hierarchy
+docs/DYNAMIC_SPACE.md                    player/NPC/Jolt local float model
+docs/PHASE2_VALIDATION.md                validation and compatibility notes

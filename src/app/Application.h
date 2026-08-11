@@ -7,6 +7,8 @@
 #include "render/BlockSelectionRenderer.h"
 #include "render/ChunkWorldRenderer.h"
 #include "render/OgreRenderer.h"
+#include "spatial/bridge/WorldDynamicBridge.h"
+#include "spatial/dynamic/DynamicSpace.h"
 #include "ui/UiConfig.h"
 #include "world/chunk/ChunkManager.h"
 #include "world/chunk/ChunkStreamingManager.h"
@@ -25,50 +27,24 @@
 
 namespace app
 {
-    /**
-     * Application is the top-level owner. It controls the lifetimes and
-     * the startup/shutdown order of every subsystem:
-     *
-     *   SDL window (platform bridge)
-     *     -> InputManager
-     *     -> OgreRenderer
-     *     -> world: registries -> worldgen -> chunk manager -> streaming
-     *     -> render: chunk world renderer (mesh rebuild on change)
-     *     -> input: free camera (WASD + mouse look)
-     *
-     * The main loop drives: input polling -> camera/streaming/mesh sync ->
-     * render frame. ESC / window close / quit events request a clean
-     * shutdown (running=false); no hard exit is ever used.
-     */
     class Application
     {
     public:
         ~Application();
-
         bool initialize();
-
-        /** One variable-rate application update driven once per rendered frame. */
         void runFrameUpdate();
-
-        /** Renders one frame (runs at the render rate, not the fixed rate). */
         void renderFrame();
-
         void requestShutdown();
         bool isRunning() const { return mRunning; }
-
-        /** SDL window id used by the acceptance smoke tests. */
         std::uint32_t getWindowId() const;
-
-        /** Requests a resize through SDL; the real resize event then flows
-         *  through the normal event pipeline. Used by smoke tests. */
         bool resizeWindow( int width, int height );
-
-        /** Ordered teardown of all subsystems. */
         void shutdown();
 
     private:
         bool initializeWorld();
+        world::WorldPosition cameraWorldPosition() const;
         world::BlockAddress cameraBlock() const;
+        void maybeRebaseDynamicSpace();
         void moveCamera( float dtSeconds );
         void updateCameraView();
         void updateBlockTarget();
@@ -77,7 +53,6 @@ namespace app
 
         config::Settings mSettings;
         std::filesystem::path mSettingsPath;
-
         std::unique_ptr<platform::PlatformWindowBridge> mPlatform;
         std::unique_ptr<input::InputManager> mInput;
         std::unique_ptr<render::OgreRenderer> mRenderer;
@@ -85,24 +60,20 @@ namespace app
         std::unique_ptr<render::BlockSelectionRenderer> mSelectionRenderer;
         ui::UiConfig mUiConfig;
         std::optional<world::interaction::BlockPickResult> mTargetBlock;
-
-        // World state (milestone 06 wiring).
         world::BlockRegistry mBlocks;
         world::BiomeRegistry mBiomes;
         world::ResourceRegistry mResources;
         world::BlockIdTable mIdTable;
-
         worldgen::WorldGenConfig mGenConfig;
         std::unique_ptr<worldgen::WorldGen> mWorldGen;
         world::ChunkManager mChunks;
         std::unique_ptr<world::ChunkStreamingManager> mStreaming;
-
+        spatial::dynamic::DynamicSpace mDynamicSpace;
+        spatial::bridge::WorldDynamicBridge mDynamicBridge;
         camera::FreeCameraController mCamera;
         world::StickyGroupAnchor mRenderAnchor;
-
         std::chrono::steady_clock::time_point mLastTick;
         std::chrono::steady_clock::time_point mLastDebugUpdate;
-
         bool mRunning = false;
     };
 } // namespace app
