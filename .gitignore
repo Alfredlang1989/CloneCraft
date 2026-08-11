@@ -39,3 +39,12 @@ Thumbs.db
 # Python helper cache
 __pycache__/
 *.pyc
+
+# Project-local agent tools
+.tools/
+
+# Graphify: keep shareable graph/report/manifest outputs trackable,
+# but never commit local cache/cost/incremental scratch state.
+graphify-out/cache/
+graphify-out/cost.json
+.graphify_incremental.json
