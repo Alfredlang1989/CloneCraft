@@ -31,8 +31,10 @@ namespace spatial::dynamic
         // Choose an integer number of full DynamicSpace edges which maps the
         // coordinate back into [-half,+half). This also handles teleports.
         const double stepsD = std::floor( ( c + half ) / edge );
-        if( stepsD < static_cast<double>( std::numeric_limits<std::int64_t>::min() / mEdgeBlocks ) ||
-            stepsD > static_cast<double>( std::numeric_limits<std::int64_t>::max() / mEdgeBlocks ) )
+        const std::int64_t minSteps = std::numeric_limits<std::int64_t>::min() / mEdgeBlocks;
+        const std::int64_t maxSteps = std::numeric_limits<std::int64_t>::max() / mEdgeBlocks;
+        if( stepsD < static_cast<double>( minSteps ) ||
+            stepsD > static_cast<double>( maxSteps ) )
             throw std::overflow_error( "DynamicSpace rebase delta overflow" );
         return static_cast<std::int64_t>( stepsD ) * mEdgeBlocks;
     }
