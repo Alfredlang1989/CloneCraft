@@ -1,264 +1,38 @@
 {
   "modules": [
-    {
-      "name": "core",
-      "prefix": "src/core/",
-      "mayDependOn": [
-        "core"
-      ]
-    },
-    {
-      "name": "config",
-      "prefix": "src/config/",
-      "mayDependOn": [
-        "config",
-        "core"
-      ]
-    },
-    {
-      "name": "debug",
-      "prefix": "src/debug/",
-      "mayDependOn": [
-        "debug",
-        "core"
-      ]
-    },
-    {
-      "name": "ui",
-      "prefix": "src/ui/",
-      "mayDependOn": [
-        "ui",
-        "core"
-      ]
-    },
-    {
-      "name": "camera",
-      "prefix": "src/camera/",
-      "mayDependOn": [
-        "camera",
-        "core",
-        "world.coordinates"
-      ]
-    },
-    {
-      "name": "input",
-      "prefix": "src/input/",
-      "mayDependOn": [
-        "input",
-        "core"
-      ]
-    },
-    {
-      "name": "platform",
-      "prefix": "src/platform/",
-      "mayDependOn": [
-        "platform",
-        "core"
-      ]
-    },
-    {
-      "name": "world.coordinates",
-      "prefix": "src/world/coordinates/",
-      "mayDependOn": [
-        "world.coordinates",
-        "core"
-      ]
-    },
-    {
-      "name": "world.registry",
-      "prefix": "src/world/registry/",
-      "mayDependOn": [
-        "world.registry",
-        "world.coordinates",
-        "core"
-      ]
-    },
-    {
-      "name": "world.worldgen",
-      "prefix": "src/world/worldgen/",
-      "mayDependOn": [
-        "world.worldgen",
-        "world.coordinates",
-        "world.registry",
-        "core"
-      ]
-    },
-    {
-      "name": "world.chunk",
-      "prefix": "src/world/chunk/",
-      "mayDependOn": [
-        "world.chunk",
-        "world.coordinates",
-        "world.registry",
-        "world.worldgen",
-        "core"
-      ]
-    },
-    {
-      "name": "world.interaction",
-      "prefix": "src/world/interaction/",
-      "mayDependOn": [
-        "world.interaction",
-        "world.coordinates",
-        "world.chunk",
-        "core"
-      ]
-    },
-    {
-      "name": "world.mesh",
-      "prefix": "src/world/mesh/",
-      "mayDependOn": [
-        "world.mesh",
-        "world.coordinates",
-        "world.registry",
-        "world.chunk",
-        "core"
-      ]
-    },
-    {
-      "name": "render",
-      "prefix": "src/render/",
-      "mayDependOn": [
-        "render",
-        "core",
-        "platform",
-        "debug",
-        "world.coordinates",
-        "world.registry",
-        "world.chunk",
-        "world.mesh",
-        "world.worldgen",
-        "ui",
-        "config"
-      ]
-    },
-    {
-      "name": "app",
-      "prefix": "src/app/",
-      "mayDependOn": [
-        "app",
-        "core",
-        "debug",
-        "camera",
-        "input",
-        "platform",
-        "render",
-        "world.coordinates",
-        "world.registry",
-        "world.worldgen",
-        "world.chunk",
-        "world.mesh",
-        "ui",
-        "world.interaction",
-        "config"
-      ]
-    },
-    {
-      "name": "main",
-      "prefix": "src/main.cpp",
-      "mayDependOn": [
-        "main",
-        "app",
-        "core"
-      ]
-    }
+    {"name":"core","prefix":"src/core/","mayDependOn":["core"]},
+    {"name":"config","prefix":"src/config/","mayDependOn":["config","core"]},
+    {"name":"debug","prefix":"src/debug/","mayDependOn":["debug","core"]},
+    {"name":"ui","prefix":"src/ui/","mayDependOn":["ui","core"]},
+    {"name":"spatial.dynamic","prefix":"src/spatial/dynamic/","mayDependOn":["spatial.dynamic","core"]},
+    {"name":"spatial.bridge","prefix":"src/spatial/bridge/","mayDependOn":["spatial.bridge","spatial.dynamic","world.coordinates","core"]},
+    {"name":"camera","prefix":"src/camera/","mayDependOn":["camera","core","spatial.dynamic"]},
+    {"name":"input","prefix":"src/input/","mayDependOn":["input","core"]},
+    {"name":"platform","prefix":"src/platform/","mayDependOn":["platform","core"]},
+    {"name":"world.coordinates","prefix":"src/world/coordinates/","mayDependOn":["world.coordinates","core"]},
+    {"name":"world.registry","prefix":"src/world/registry/","mayDependOn":["world.registry","world.coordinates","core"]},
+    {"name":"world.worldgen","prefix":"src/world/worldgen/","mayDependOn":["world.worldgen","world.coordinates","world.registry","core"]},
+    {"name":"world.chunk","prefix":"src/world/chunk/","mayDependOn":["world.chunk","world.coordinates","world.registry","world.worldgen","core"]},
+    {"name":"world.interaction","prefix":"src/world/interaction/","mayDependOn":["world.interaction","world.coordinates","world.chunk","core"]},
+    {"name":"world.mesh","prefix":"src/world/mesh/","mayDependOn":["world.mesh","world.coordinates","world.registry","world.chunk","core"]},
+    {"name":"render","prefix":"src/render/","mayDependOn":["render","core","platform","debug","world.coordinates","world.registry","world.chunk","world.mesh","world.worldgen","ui","config"]},
+    {"name":"app","prefix":"src/app/","mayDependOn":["app","core","debug","camera","input","platform","render","world.coordinates","world.registry","world.worldgen","world.chunk","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"]},
+    {"name":"main","prefix":"src/main.cpp","mayDependOn":["main","app","core"]}
   ],
-  "ignoreIncludePrefixes": [
-    "third_party/"
+  "ignoreIncludePrefixes":["third_party/"],
+  "warnCppLinesAbove":500,
+  "externalIncludePolicies":[
+    {"modules":["core","debug","camera","world.coordinates","world.registry","world.worldgen","world.chunk","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"],"forbiddenPrefixes":["SDL3/","Ogre","Hlms/","Math/Simple/Ogre"]},
+    {"modules":["input","platform"],"forbiddenPrefixes":["Ogre","Hlms/","Math/Simple/Ogre"]},
+    {"modules":["render"],"forbiddenPrefixes":["SDL3/"]}
   ],
-  "warnCppLinesAbove": 500,
-  "externalIncludePolicies": [
-    {
-      "modules": [
-        "core",
-        "debug",
-        "camera",
-        "world.coordinates",
-        "world.registry",
-        "world.worldgen",
-        "world.chunk",
-        "world.mesh",
-        "ui",
-        "world.interaction",
-        "config"
-      ],
-      "forbiddenPrefixes": [
-        "SDL3/",
-        "Ogre",
-        "Hlms/",
-        "Math/Simple/Ogre"
-      ]
-    },
-    {
-      "modules": [
-        "input",
-        "platform"
-      ],
-      "forbiddenPrefixes": [
-        "Ogre",
-        "Hlms/",
-        "Math/Simple/Ogre"
-      ]
-    },
-    {
-      "modules": [
-        "render"
-      ],
-      "forbiddenPrefixes": [
-        "SDL3/"
-      ]
-    }
-  ],
-  "sourcePatternPolicies": [
-    {
-      "modules": [
-        "camera"
-      ],
-      "pattern": "\\bdouble\\s+m[XYZ]\\b",
-      "message": "camera must not store authoritative global floating XYZ; use world::WorldPosition"
-    },
-    {
-      "modules": [
-        "app",
-        "render"
-      ],
-      "pattern": "\\bsetCameraPose\\s*\\(",
-      "message": "absolute-style camera pose API is forbidden; renderer accepts local pose only"
-    },
-    {
-      "modules": [
-        "app"
-      ],
-      "pattern": "mCamera\\.(?:x|y|z)\\s*\\(",
-      "message": "global camera XYZ accessors are forbidden; use WorldPosition hierarchy"
-    },
-    {
-      "modules": [
-        "render"
-      ],
-      "pattern": "static_cast\\s*<\\s*float\\s*>\\s*\\([^\\n;]*BLOCKS_PER_(?:CHUNK|GROUP)_EDGE",
-      "message": "do not cast absolute chunk/group coordinates directly to float; subtract render anchor first"
-    },
-    {
-      "modules": [
-        "app",
-        "camera",
-        "render",
-        "world.coordinates",
-        "world.worldgen",
-        "world.chunk",
-        "world.mesh",
-        "world.interaction"
-      ],
-      "pattern": "\\b(?:BlockCoord|ChunkCoord|GroupCoord)\\b",
-      "message": "flattened/global spatial coordinate types are forbidden; use hierarchical *Address types"
-    },
-    {
-      "modules": [
-        "world.worldgen"
-      ],
-      "pattern": "\\b(?:checkedChunkOrigin|globalBlock|globalChunk|absoluteBlock|absoluteChunk)\\b",
-      "message": "worldgen must not flatten hierarchical addresses into global block/chunk coordinates"
-    }
+  "sourcePatternPolicies":[
+    {"modules":["camera"],"pattern":"\\bdouble\\s+m[XYZ]\\b","message":"camera must not store an absolute/global floating XYZ; use spatial::dynamic::Position3f"},
+    {"modules":["app","render"],"pattern":"\\bsetCameraPose\\s*\\(","message":"absolute-style camera pose API is forbidden; renderer accepts local pose only"},
+    {"modules":["app"],"pattern":"mCamera\\.(?:x|y|z)\\s*\\(","message":"camera exposes only DynamicSpace-local position; convert through WorldDynamicBridge"},
+    {"modules":["render"],"pattern":"static_cast\\s*<\\s*float\\s*>\\s*\\([^\\n;]*BLOCKS_PER_(?:CHUNK|GROUP)_EDGE","message":"do not cast absolute chunk/group coordinates directly to float; subtract render anchor first"},
+    {"modules":["app","camera","render","world.coordinates","world.worldgen","world.chunk","world.mesh","world.interaction"],"pattern":"\\b(?:BlockCoord|ChunkCoord|GroupCoord)\\b","message":"flattened/global spatial coordinate types are forbidden; use hierarchical *Address types"},
+    {"modules":["world.worldgen"],"pattern":"\\b(?:checkedChunkOrigin|globalBlock|globalChunk|absoluteBlock|absoluteChunk)\\b","message":"worldgen must not flatten hierarchical addresses into global block/chunk coordinates"},
+    {"modules":["camera"],"pattern":"\\bworld::","message":"camera must stay independent from hierarchical world coordinates; use spatial::dynamic types"}
   ]
 }
