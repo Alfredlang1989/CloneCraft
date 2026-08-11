@@ -9,13 +9,40 @@
 
 namespace world
 {
+    namespace
+    {
+        std::int64_t validatedViewRadius( std::int64_t viewRadius )
+        {
+            if( viewRadius < 0 ) return 0;
+            constexpr std::int64_t kMaxDiameterSafeRadius =
+                ( std::numeric_limits<std::int64_t>::max() - 1 ) / 2;
+            if( viewRadius > kMaxDiameterSafeRadius )
+                throw std::invalid_argument(
+                    "ChunkStreamingManager view radius is too large for a signed diameter" );
+            return viewRadius;
+        }
+
+        void reserveCubeIfRepresentable( std::vector<ChunkAddress> &items, std::int64_t diameter )
+        {
+            if( diameter <= 0 ) return;
+            const std::size_t max = std::numeric_limits<std::size_t>::max();
+            const std::uint64_t d64 = static_cast<std::uint64_t>( diameter );
+            if( d64 > static_cast<std::uint64_t>( max ) ) return;
+            const std::size_t d = static_cast<std::size_t>( d64 );
+            if( d != 0u && d > max / d ) return;
+            const std::size_t square = d * d;
+            if( square != 0u && d > max / square ) return;
+            items.reserve( square * d );
+        }
+    }
+
     ChunkStreamingManager::ChunkStreamingManager( worldgen::WorldGen &gen,
                                                    ChunkManager &chunks,
                                                    std::int64_t viewRadius,
                                                    std::size_t commitsPerUpdate )
         : mGen( gen ),
           mChunks( chunks ),
-          mViewRadius( viewRadius < 0 ? 0 : viewRadius ),
+          mViewRadius( validatedViewRadius( viewRadius ) ),
           mCommitsPerUpdate( std::max<std::size_t>( 1u, commitsPerUpdate ) ),
           mWorker( [this]() { workerLoop(); } )
     {
@@ -89,14 +116,11 @@ namespace world
         mReadySpaceCv.notify_all();
 
         std::vector<ChunkAddress> missing;
+        // Constructor validation guarantees this signed expression cannot overflow.
         const std::int64_t diameter = mViewRadius * 2 + 1;
-        if( diameter > 0 )
-        {
-            const std::uint64_t d = static_cast<std::uint64_t>( diameter );
-            const std::uint64_t count = d * d * d;
-            if( count <= static_cast<std::uint64_t>( std::numeric_limits<std::size_t>::max() ) )
-                missing.reserve( static_cast<std::size_t>( count ) );
-        }
+        // Reserve only when the cube volume itself is representable in size_t;
+        // checked multiplication avoids unsigned wrap in the capacity estimate.
+        reserveCubeIfRepresentable( missing, diameter );
 
         for( std::int64_t dx = -mViewRadius; dx <= mViewRadius; ++dx )
             for( std::int64_t dy = -mViewRadius; dy <= mViewRadius; ++dy )
