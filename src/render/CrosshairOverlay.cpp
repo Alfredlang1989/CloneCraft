@@ -159,6 +159,8 @@ namespace render
         rebuildGeometry();
     }
 
+    // Position plus yaw/pitch is intentionally a compact positional pose API.
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     void CrosshairOverlay::setLocalPose( float x, float y, float z, float yaw, float pitch )
     {
         if( !mNode )
