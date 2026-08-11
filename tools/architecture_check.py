@@ -15,7 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
-SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".cc", ".cxx"}
+SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".cc", ".cxx", ".inc"}
 
 
 def load_rules(path: Path):

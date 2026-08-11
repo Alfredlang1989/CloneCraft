@@ -1,0 +1,12 @@
+{
+    "stages": [
+        {
+            "id": "terrain",
+            "order": 0
+        },
+        {
+            "id": "addon",
+            "order": 100
+        }
+    ]
+}
