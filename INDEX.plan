@@ -5,6 +5,7 @@ CloneCraft: modular C++20 3D voxel sandbox. SDL3 owns window/input; OgreNext
 renders; JSON/Lua own content/worldgen; Jolt physics is planned.
 
 READ FIRST ON EVERY AGENT RUN
+0. AGENTS.md
 1. INDEX.plan
 2. docs/STATUS.md
 3. docs/ARCHITECTURE.md
@@ -13,8 +14,24 @@ READ FIRST ON EVERY AGENT RUN
 6. docs/PHASE2_VALIDATION.md
 7. docs/DATA_DRIVEN_AUDIT.md
 8. docs/STATIC_ANALYSIS.md
-9. git status
-10. git log --oneline -10
+9. docs/AGENT_HARNESS.md
+10. git status
+11. git log --oneline -10
+
+AGENT ORIENTATION / CODE GRAPH
+Graphify is the mandatory first structural map for non-trivial code work and for
+all architecture/ownership/call-flow/data-flow questions.
+
+Project-local status: `python3 tools/graphify_agent.py status`
+Project-local bootstrap when missing: `python3 tools/graphify_agent.py bootstrap`
+Refresh deterministic local structural graph: `python3 tools/graphify_agent.py refresh`
+Query before broad source search: `python3 tools/graphify_agent.py query "<actual task/question>"`
+
+The mandatory baseline is code-only AST extraction and does not silently invoke an
+external LLM backend. Follow graph results into source/config/tests and verify them.
+EXTRACTED graph edges are structural evidence; INFERRED edges are leads that require
+source verification. Never hand-edit graphify-out generated files.
+Do not install Graphify or any other dependency into the operating system.
 
 BUILD
 Preferred gate: `./compile.sh`
@@ -49,12 +66,15 @@ OTHER ARCHITECTURE INVARIANTS
 - No concrete geology/material semantics in generic WorldGen C++.
 
 MANDATORY END-OF-RUN GATE
+- for architecture-sensitive changes, refresh Graphify and query the affected flow/boundary again
 - `python3 tools/architecture_check.py --root .`
 - normal completion: `./compile.sh` when target system dependencies are present
 - never claim the graphical target built if SDL3/OgreNext were unavailable
 - never install missing system dependencies automatically
+- update architecture/status/decision docs when implemented ownership changed
 
 IMPORTANT FILES
+AGENTS.md                                 coding-agent contract
 src/world/coordinates/*                 exact hierarchical block world
 src/spatial/dynamic/*                   local float DynamicSpace
 src/spatial/bridge/*                    only world/dynamic translation boundary
@@ -63,8 +83,11 @@ src/world/worldgen/*                    generic Lua field/pass worldgen runtime
 src/world/chunk/*                       sparse chunks/groups + streaming
 src/render/*                            Ogre-local rendering
 src/app/Application.*                   subsystem wiring/rebase transaction
-tools/architecture_rules.json           dependency firewall
+tools/architecture_rules.json          dependency firewall
+tools/graphify_agent.py                 project-local code-graph harness
+.graphifyignore                         Graphify project-owned-source scope
 
-docs/COORDINATES.md                     Phase-2 world hierarchy
-docs/DYNAMIC_SPACE.md                    player/NPC/Jolt local float model
-docs/PHASE2_VALIDATION.md                validation and compatibility notes
+docs/COORDINATES.md                    Phase-2 world hierarchy
+docs/DYNAMIC_SPACE.md                   player/NPC/Jolt local float model
+docs/PHASE2_VALIDATION.md               validation and compatibility notes
+docs/AGENT_HARNESS.md                   Graphify/evidence workflow for coding agents
