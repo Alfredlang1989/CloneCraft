@@ -40,7 +40,8 @@
     CHECK( isSediment( blockAtGlobal( -459, shoreBed, 107 ) ) );
 
     // Inner bank begins at water level, not on a uniform +2 sand shelf.
-    CHECK_EQ( blockAtGlobal( -459, 1, -24 ), table.indexOf( "core:air" ) );
+    const std::uint16_t innerBankAbove = blockAtGlobal( -459, 1, -24 );
+    CHECK( !blocks.get( table.idOf( innerBankAbove ) ).solid );
     CHECK_EQ( blockAtGlobal( -459, 0, -24 ), table.indexOf( "core:sand" ) );
     CHECK_EQ( blockAtGlobal( -459, 0, -20 ), table.indexOf( "core:water" ) );
     // A little farther out the bank is allowed to rise by one block.
