@@ -1,6 +1,6 @@
 # Static analysis and architecture gate
 
-Clonecraft now has two complementary repository-local analysis gates.
+Clonecraft now has three complementary repository-local analysis layers.
 
 ## 1. clang-tidy: established C++ AST / semantic analysis
 
@@ -83,6 +83,38 @@ camera/input ----> app <---- debug formatter
 
 The exact authoritative rule graph is `tools/architecture_rules.json`.
 
+## 3. Graphify: queryable structural code graph
+
+`tools/graphify_agent.py` manages a pinned project-local Graphify installation below
+`.tools/` and generates the structural graph in `graphify-out/`.
+
+The mandatory baseline is intentionally code-only:
+
+```bash
+python3 tools/graphify_agent.py bootstrap
+python3 tools/graphify_agent.py refresh
+python3 tools/graphify_agent.py query "show the dependency flow around worldgen"
+```
+
+The `refresh` command drives Graphify's local structural extraction path. It does not
+silently opt into a semantic LLM backend. This gives agents a deterministic dependency
+and call-relationship map before they begin broad source exploration.
+
+Graphify is complementary rather than authoritative:
+
+- `EXTRACTED` relationships are source-derived structural evidence;
+- `INFERRED` relationships are leads that require source verification;
+- graph results must be followed into source/config/tests before changing behavior;
+- generated graph files are never hand-edited;
+- architecture-sensitive changes refresh and re-query the graph before completion.
+
+`.graphifyignore` keeps build products, third-party sources, saves/runtime data, the
+local tool environment and generated Ogre shader dumps out of the project graph.
+Local Graphify cache/cost files are ignored by git while the useful graph/report
+artifacts remain trackable for team/agent reuse.
+
+See `AGENTS.md` and `docs/AGENT_HARNESS.md` for the mandatory coding-agent workflow.
+
 ## CMake helpers
 
 When Python is available CMake exposes:
@@ -97,13 +129,18 @@ When clang-tidy is also available:
 cmake --build <build-dir> --target static_analysis
 ```
 
-`compile.sh` remains the preferred entry point because it runs the gates in the
-required order before the normal build and tests.
+`compile.sh` remains the preferred build entry point because it runs the enforced
+architecture and C++ static-analysis gates in the required order before the normal
+build and tests. Graphify is an agent-orientation/impact-analysis tool and is not run
+on every normal compilation.
 
 ## Agent rule
 
-Every future coding-agent run must read `INDEX.plan`, inspect `git status`, and
-use the normal analysis/build path before claiming a milestone complete.
-Do not silence an architecture/static-analysis failure by changing the checker
-unless the architectural rule itself is being deliberately changed and the
-reason is documented.
+Every future coding-agent run must read `AGENTS.md`, `INDEX.plan`, inspect `git status`,
+and use the Graphify query-first workflow before non-trivial code exploration. The
+normal analysis/build path remains mandatory before claiming a milestone complete.
+
+Do not silence an architecture/static-analysis failure by changing the checker unless
+the architectural rule itself is being deliberately changed and the reason is
+documented. Do not reinterpret a generated Graphify edge as permission to violate an
+explicit CloneCraft ownership invariant.
