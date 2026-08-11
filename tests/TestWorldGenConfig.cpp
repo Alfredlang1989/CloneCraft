@@ -8,12 +8,24 @@
 
 namespace
 {
-    std::filesystem::path writeTempConfig( const std::string &name, const std::string &text )
+    std::filesystem::path writeTempConfig(
+        const std::string &name, const std::string &text,
+        const std::string &stages = R"({"stages":[{"id":"terrain","order":0},{"id":"addon","order":1}]})" )
     {
-        const auto path = std::filesystem::temp_directory_path() / name;
+        const auto dir = std::filesystem::temp_directory_path() / ( name + "-dir" );
+        std::filesystem::remove_all( dir );
+        std::filesystem::create_directories( dir );
+        const auto path = dir / "worldgen.json";
         std::ofstream out( path );
         out << text;
+        std::ofstream stageOut( dir / "stage.json" );
+        stageOut << stages;
         return path;
+    }
+
+    void removeTempConfig( const std::filesystem::path &path )
+    {
+        std::filesystem::remove_all( path.parent_path() );
     }
 
     TEST_CASE( worldgen_config_loads_fields_and_generic_passes )
@@ -59,15 +71,18 @@ namespace
                 ]
             })" );
         const worldgen::WorldGenConfig cfg = worldgen::loadWorldGenConfig( path );
-        std::filesystem::remove( path );
+        removeTempConfig( path );
         CHECK_EQ( cfg.seed, 42u );
         CHECK_EQ( cfg.workerThreads, 6u );
         CHECK_EQ( cfg.surfaceField, std::string( "height" ) );
         CHECK_EQ( cfg.fields.size(), 3u );
         CHECK_EQ( cfg.passes.size(), 3u );
         CHECK_EQ( cfg.fields[2].functionName, std::string( "sampleOre" ) );
-        CHECK( cfg.passes[0].stage == worldgen::PassStage::Terrain );
-        CHECK( cfg.passes[2].stage == worldgen::PassStage::Addon );
+        CHECK_EQ( cfg.stages.size(), 2u );
+        CHECK_EQ( cfg.stages[0].id, std::string( "terrain" ) );
+        CHECK_EQ( cfg.stages[1].id, std::string( "addon" ) );
+        CHECK_EQ( cfg.passes[0].stage, std::string( "terrain" ) );
+        CHECK_EQ( cfg.passes[2].stage, std::string( "addon" ) );
         CHECK_EQ( cfg.passes[1].maskField, std::string( "mask" ) );
         CHECK_EQ( cfg.passes[1].surfaceOffset, -4 );
         CHECK_EQ( cfg.passes[1].bottomField, std::string( "mask" ) );
@@ -93,7 +108,7 @@ namespace
         {
             threw = std::string( e.what() ).find( "unknown field" ) != std::string::npos;
         }
-        std::filesystem::remove( path );
+        removeTempConfig( path );
         CHECK( threw );
     }
 
@@ -104,7 +119,7 @@ namespace
             R"({
                 "surfaceField":"height",
                 "fields":[{"id":"height","dimension":"2d","script":"height.lua"}],
-                "passes":[{"id":"bad","type":"volume","block":"core:stone","field":"missing"}]
+                "passes":[{"id":"bad","type":"volume","stage":"terrain","block":"core:stone","field":"missing"}]
             })" );
         bool threw = false;
         try { (void)worldgen::loadWorldGenConfig( path ); }
@@ -112,9 +127,35 @@ namespace
         {
             threw = std::string( e.what() ).find( "unknown field" ) != std::string::npos;
         }
-        std::filesystem::remove( path );
+        removeTempConfig( path );
         CHECK( threw );
     }
+    TEST_CASE( worldgen_config_loads_mod_defined_stage_without_engine_changes )
+    {
+        const auto path = writeTempConfig(
+            "clonecraft-worldgen-custom-stage.json",
+            R"({
+                "surfaceField":"height",
+                "fields":[{"id":"height","dimension":"2d","script":"height.lua"}],
+                "passes":[
+                    {"id":"base","type":"fill_below","stage":"terrain",
+                     "block":"core:stone","field":"height"},
+                    {"id":"erosion","type":"surface","stage":"erosion",
+                     "block":"core:air","field":"height"}
+                ]
+            })",
+            R"({"stages":[
+                {"id":"terrain","order":0},
+                {"id":"erosion","order":50},
+                {"id":"addon","order":100}
+            ]})" );
+        const worldgen::WorldGenConfig cfg = worldgen::loadWorldGenConfig( path );
+        removeTempConfig( path );
+        CHECK_EQ( cfg.stages.size(), 3u );
+        CHECK_EQ( cfg.stages[1].id, std::string( "erosion" ) );
+        CHECK_EQ( cfg.passes[1].stage, std::string( "erosion" ) );
+    }
+
     TEST_CASE( worldgen_config_rejects_unknown_pass_stage )
     {
         const auto path = writeTempConfig(
@@ -131,7 +172,7 @@ namespace
         {
             threw = std::string( e.what() ).find( "stage" ) != std::string::npos;
         }
-        std::filesystem::remove( path );
+        removeTempConfig( path );
         CHECK( threw );
     }
 
