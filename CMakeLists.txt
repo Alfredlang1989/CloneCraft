@@ -297,3 +297,12 @@ if(Python3_Interpreter_FOUND)
       COMMENT "Running clang-tidy AST/static analysis")
   endif()
 endif()
+
+# Developer diagnostics. Keep these independent of the SDL/Ogre application.
+option(CLONECRAFT_BUILD_TOOLS "Build CloneCraft developer diagnostic tools" ON)
+if(CLONECRAFT_BUILD_TOOLS)
+  find_package(ZLIB REQUIRED)
+  add_executable(clonecraft_biomemap tools/BiomeMap.cpp)
+  target_include_directories(clonecraft_biomemap PRIVATE src)
+  target_link_libraries(clonecraft_biomemap PRIVATE clonecraft_worldgen ZLIB::ZLIB)
+endif()
