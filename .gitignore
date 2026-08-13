@@ -39,3 +39,8 @@ Thumbs.db
 # Python helper cache
 __pycache__/
 *.pyc
+
+# Agent tool state (regenerable, machine-local)
+.opencode/
+.claude/
+graphify-out/

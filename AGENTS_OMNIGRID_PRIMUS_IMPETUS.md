@@ -1,0 +1,1092 @@
+# OmniGrid — Primus impetus
+## Verbindliche Arbeitsanweisung für Coding Agents
+
+> **Zweck:** Diese Datei ist der operative Arbeitsvertrag für Coding-Agents, die an OmniGrid arbeiten.
+>
+> **Leitregel:**  
+> **Kleinste generische Schicht bauen → an einem echten Verbraucher beweisen → testen → Architektur prüfen → AST prüfen → Dokumentation aktualisieren → Graphify aktualisieren → Git committen → GitHub dokumentieren → erst dann zum nächsten Milestone.**
+>
+> Kein zweiter World-State-Pfad. Kein zweites Eventsystem. Keine Subsystem-Datenbank. Kein Singleplayer-Sonderweg. Keine Mega-Refactors auf Vorrat.
+
+---
+
+# 0. Nicht verhandelbare Grundregeln
+
+Der Agent arbeitet **inkrementell und milestone-basiert**.
+
+Jeder Milestone muss einen kleinen, überprüfbaren und funktionierenden Git-Zustand erzeugen.
+
+Der Agent darf einen Milestone **nicht** als DONE melden, solange:
+
+- Tests fehlen oder fehlschlagen;
+- der Architektur-Gate fehlschlägt;
+- der clang-tidy/AST-Gate fehlschlägt;
+- relevante Dokumentation veraltet ist;
+- Graphify nach relevanten Änderungen nicht aktualisiert wurde;
+- der Milestone nicht committed wurde;
+- der Commit nicht dem zugehörigen GitHub-Issue zugeordnet/dokumentiert wurde.
+
+## Verboten
+
+- keine Mega-Refactors auf Vorrat;
+- keine zweite World-State-API;
+- keine zweite Persistence-Architektur;
+- keine zweite Event-/Action-Architektur;
+- keine subsystemeigene Datenbank;
+- kein direkter Input/UI → `ChunkManager::setBlock()`-Pfad;
+- kein direkter UI → ECS/Sidecar/RocksDB-Zugriff;
+- kein direkter Lua → Raw-Sidecar-Zugriff;
+- keine ECS-Entity pro normalem Voxel;
+- kein `if (singleplayer) mutateDirectly();`;
+- kein Servercode mit OgreNext-/Renderer-Abhängigkeit;
+- keine C++-Spezialfälle für konkrete Default-Inhalte;
+- keine stillen Änderungen an Architekturregeln nur damit ein fehlerhafter Patch wieder grün wird;
+- kein `git reset --hard`, kein Force-Push und kein Überschreiben fremder Arbeit ohne ausdrücklichen Auftrag;
+- keine automatische Installation oder Änderung von OS-Paketen.
+
+---
+
+# 1. Pflichtprogramm am Anfang JEDER Agent-Session
+
+Bevor Produktionscode geändert wird:
+
+1. `INDEX.plan` lesen.
+2. `docs/STATUS.md` lesen.
+3. `docs/ARCHITECTURE.md` lesen.
+4. `docs/DECISIONS.md` lesen.
+5. `docs/MILESTONES.md` lesen.
+6. Relevante Spezialdokumentation lesen.
+7. `graphify-out/GRAPH_REPORT.md` lesen, sofern vorhanden.
+8. Graphify für Architektur-/Abhängigkeitsfragen verwenden.
+9. Das aktuelle GitHub-Issue vollständig lesen.
+10. Vorgelagerte/abhängige GitHub-Issues prüfen.
+11. `git status` ausführen.
+12. `git log --oneline -10` ausführen.
+13. `git diff` und ggf. `git diff --cached` prüfen.
+14. Fremde oder unzusammenhängende Änderungen identifizieren und nicht anfassen.
+15. Den exakten Milestone-Scope festlegen.
+
+## GitHub ist Teil der Arbeitsquelle
+
+Der Agent darf GitHub nicht nur als Linkablage behandeln.
+
+Vor einem Milestone:
+
+- zugehöriges Issue öffnen/lesen;
+- Acceptance Criteria prüfen;
+- Abhängigkeiten und verwandte Issues prüfen;
+- vorhandene Diskussionen/Kommentare berücksichtigen;
+- Parent-/Master-Tracker (#15) bei Architekturentscheidungen berücksichtigen.
+
+Der Agent soll Änderungen gegen **Repo + Issues + Dokumentation gemeinsam** planen.
+
+---
+
+# 2. Baseline vor jeder Feature-Arbeit
+
+Der Agent beweist zuerst den Ausgangszustand.
+
+Mindestens:
+
+```bash
+python3 tools/architecture_check.py --root .
+```
+
+Wenn die Zielmaschine die benötigten Abhängigkeiten besitzt:
+
+```bash
+./compile.sh --analyze-only
+```
+
+und anschließend bei normaler Entwicklungsarbeit:
+
+```bash
+./compile.sh
+```
+
+Relevante vorhandene Tests zusätzlich gezielt ausführen.
+
+## Wenn die Baseline bereits fehlschlägt
+
+Dann:
+
+- Fehler dokumentieren;
+- prüfen, ob er den Milestone blockiert;
+- nicht still dem eigenen Patch zurechnen;
+- nicht nebenbei völlig fremde Fehler reparieren;
+- bei Blockierung den Milestone als `BLOCKED`/`PARTIAL` melden, nicht als DONE.
+
+---
+
+# 3. Graphify ist Pflicht, aber kein Ersatz für clang-tidy
+
+OmniGrid nutzt zwei unterschiedliche Analyseebenen.
+
+## 3.1 Graphify
+
+Graphify dient dem Agenten als Code-/Architekturgraph.
+
+Vor größeren Änderungen bevorzugt nutzen:
+
+- `query`
+- `path`
+- `explain`
+
+Nach relevanten Codeänderungen:
+
+```bash
+graphify update .
+```
+
+Wenn Dokumentation, Konfiguration, Schemas oder andere für den Knowledge Graph relevante Dateien verändert wurden, zusätzlich über OpenCode:
+
+```text
+/graphify . --update
+```
+
+## 3.2 clang-tidy / C++ AST
+
+Der verbindliche C++-AST-/Semantic-Gate bleibt:
+
+```bash
+./compile.sh --analyze-only
+```
+
+bzw. der darin aufgerufene statische Analysepfad.
+
+**Graphify grün ersetzt clang-tidy nicht.**  
+**clang-tidy grün ersetzt ein aktuelles Graphify nicht.**
+
+Beides hat unterschiedliche Aufgaben.
+
+---
+
+# 4. Dokumentationspflicht pro Milestone
+
+Der Agent muss am Ende jedes Milestones prüfen, welche Dokumentation betroffen ist.
+
+## 4.1 `docs/STATUS.md`
+
+Aktualisieren, wenn sich Projektzustand geändert hat.
+
+Dokumentieren:
+
+- was implementiert wurde;
+- was getestet wurde;
+- Einschränkungen;
+- Performance-/Determinismus-Ergebnisse;
+- bekannte Blocker;
+- aktuellen Milestone-Status.
+
+## 4.2 `docs/MILESTONES.md`
+
+Nach jedem abgeschlossenen Milestone prüfen und bei Bedarf aktualisieren.
+
+Die Datei muss die **aktuelle Realität** beschreiben, nicht einen historischen Plan.
+
+## 4.3 `INDEX.plan`
+
+Nach jedem Milestone zwingend prüfen.
+
+Aktualisieren, wenn sich geändert haben:
+
+- Projektname;
+- Entwicklungsphase;
+- Architektur-Invarianten;
+- Read-first-Liste;
+- wichtige Dateien;
+- Build-/Analysebefehle;
+- Agenten-Workflow;
+- Abhängigkeiten;
+- aktuelle Reihenfolge.
+
+Wenn keine Änderung nötig ist, im Abschlussbericht ausdrücklich:
+
+```text
+INDEX.plan reviewed: no change required.
+```
+
+## 4.4 `docs/ARCHITECTURE.md`
+
+Aktualisieren bei:
+
+- neuen Modulen;
+- Ownership-Änderungen;
+- Dependency-Änderungen;
+- neuen öffentlichen Abstraktionen;
+- neuen Client-/Server-/World-State-Grenzen;
+- neuen dauerhaft relevanten Datenflüssen.
+
+## 4.5 `docs/DECISIONS.md`
+
+Nur für echte langfristige Architekturentscheidungen.
+
+Nicht jede Funktion bekommt einen ADR.
+
+Ein ADR ist erforderlich, wenn spätere Agents eine Entscheidung **nicht still wieder umkehren dürfen**.
+
+## 4.6 Fachspezifische Dokumentation
+
+Beispiele:
+
+- Worldgen → Worldgen-Doku;
+- Renderer/LOD → Renderer-/Performance-Doku;
+- Coordinates → Coordinates/Dynamic-Space-Doku;
+- Persistence → Persistence-Doku;
+- Client/Server → Netzwerk-/Serverarchitektur;
+- Construction → Construction-Doku;
+- Lua → Lua-/Scripting-Doku;
+- UI → UI-Doku.
+
+## Grundsatz
+
+**Code und Dokumentation müssen im selben Milestone denselben Zustand beschreiben.**
+
+Kein „Doku später“.
+
+---
+
+# 5. Git-Pflichtworkflow
+
+Git ist Teil der Definition of Done.
+
+## 5.1 Vor der Arbeit
+
+```bash
+git status
+git log --oneline -10
+git diff
+```
+
+Bei bestehender fremder Arbeit:
+
+- nicht überschreiben;
+- nicht automatisch committen;
+- eigenen Scope sauber trennen.
+
+## 5.2 Während der Arbeit
+
+Regelmäßig prüfen:
+
+```bash
+git diff --stat
+git diff
+```
+
+Der Agent muss erkennen, wenn der Diff beginnt, den Milestone-Scope zu sprengen.
+
+## 5.3 Vor dem Milestone-Commit
+
+Pflicht:
+
+```bash
+git status
+git diff
+git diff --cached
+```
+
+Dann nur passende Dateien stagen.
+
+Bevorzugt gezielt:
+
+```bash
+git add <files>
+```
+
+oder interaktiv:
+
+```bash
+git add -p
+```
+
+Keine fremden/unrelated Änderungen mitnehmen.
+
+## 5.4 Jeder Milestone MUSS committed werden
+
+Ein Milestone ist ohne Commit **nicht abgeschlossen**.
+
+Mindestens ein sauberer Commit pro Milestone.
+
+Beispiel:
+
+```bash
+git commit -m "feat(worldstate): add prototype registry foundation (#3)"
+```
+
+oder:
+
+```bash
+git commit -m "feat(interaction): complete voxel place/remove slice (#18)"
+```
+
+Commit-Messages sollen:
+
+- kurz beschreiben, was tatsächlich abgeschlossen wurde;
+- das relevante GitHub-Issue nennen;
+- keine Behauptungen enthalten, die Tests/Gates nicht belegen.
+
+## 5.5 Tags
+
+Wenn das Projekt für den Milestone einen Tag vorsieht:
+
+```bash
+git tag <milestone-tag>
+```
+
+Nur auf einem getesteten, dokumentierten, grünen Zustand.
+
+Keine Tags auf `PARTIAL` oder `BLOCKED`.
+
+## 5.6 Push
+
+Wenn der Agent Push-Rechte und einen expliziten Arbeitsauftrag für Remote-Änderungen hat:
+
+```bash
+git push
+```
+
+und ggf.:
+
+```bash
+git push --tags
+```
+
+Kein Force-Push ohne ausdrücklichen Auftrag.
+
+---
+
+# 6. GitHub-Pflichtworkflow pro Milestone
+
+Nach dem Milestone-Commit muss der Agent GitHub aktualisieren.
+
+## Im zugehörigen Issue dokumentieren
+
+Mindestens:
+
+- Milestone-Name;
+- kurze Zusammenfassung;
+- Commit-SHA;
+- Tests/Gates;
+- relevante Dokuänderungen;
+- verbleibende Arbeit;
+- bekannte Einschränkungen.
+
+Beispielinhalt:
+
+```text
+Milestone M06 completed.
+
+Commit: abc1234
+
+Implemented:
+- voxel raycast
+- remove_block action
+- place_block action
+- shared World State mutation path
+- mesh/neighbor invalidation
+
+Validation:
+- architecture_check: PASS
+- clang-tidy AST: PASS
+- build: PASS
+- tests: PASS
+- graphify update: DONE
+
+Remaining in #18:
+- none
+```
+
+## Issue nicht vorschnell schließen
+
+Ein Parent-Issue wird erst geschlossen, wenn **alle Acceptance Criteria** erfüllt sind.
+
+Ein Teil-Milestone in #3 bedeutet nicht, dass #3 geschlossen wird.
+
+## Master-Tracker #15
+
+Wenn ein Primus-impetus-Milestone abgeschlossen wurde, soll der Agent auch den Master-Tracker #15 berücksichtigen:
+
+- Status abgleichen;
+- Fortschritt dort dokumentieren, sofern passend;
+- keine divergierende zweite Roadmap erzeugen.
+
+---
+
+# 7. Definition of Done für JEDEN Milestone
+
+Ein Milestone ist nur DONE, wenn alles zutrifft:
+
+- [ ] Scope vollständig implementiert.
+- [ ] Acceptance Criteria des Milestones erfüllt.
+- [ ] Relevante Regressionstests hinzugefügt/aktualisiert.
+- [ ] Bestehende relevante Tests grün.
+- [ ] `python3 tools/architecture_check.py --root .` grün.
+- [ ] clang-tidy/AST grün.
+- [ ] Build grün, sofern Zielsystem-Abhängigkeiten vorhanden sind.
+- [ ] Keine neue verbotene Dependency.
+- [ ] Kein neuer Bypass-Pfad.
+- [ ] Graphify-Codegraph aktualisiert.
+- [ ] Graphify-Dokument-/Semantikupdate durchgeführt, wenn nötig.
+- [ ] `STATUS.md` geprüft/aktualisiert.
+- [ ] `MILESTONES.md` geprüft/aktualisiert.
+- [ ] `INDEX.plan` geprüft/aktualisiert.
+- [ ] `ARCHITECTURE.md` geprüft/aktualisiert.
+- [ ] `DECISIONS.md` geprüft/aktualisiert.
+- [ ] Fachspezifische Doku geprüft/aktualisiert.
+- [ ] `git diff` auf unbeabsichtigte Änderungen geprüft.
+- [ ] Fremde Änderungen nicht mitcommitted.
+- [ ] Milestone committed.
+- [ ] Commit-SHA ermittelt.
+- [ ] GitHub-Issue mit Milestone-Ergebnis aktualisiert.
+- [ ] Parent-Issue nur geschlossen, wenn wirklich vollständig erledigt.
+
+---
+
+# 8. Verbindlicher Milestone-Abschlussbericht
+
+Der Agent gibt nach jedem Milestone aus:
+
+```text
+Milestone:
+Issues:
+Status: DONE / PARTIAL / BLOCKED
+
+Implemented:
+- ...
+
+Explicitly not implemented:
+- ...
+
+Tests added/changed:
+- ...
+
+Architecture gate: PASS / FAIL
+clang-tidy AST: PASS / FAIL / BLOCKED
+Build: PASS / FAIL / BLOCKED
+Tests: PASS / FAIL
+
+Graphify code update: DONE / NOT NEEDED / FAILED
+Graphify docs/semantic update: DONE / NOT NEEDED / FAILED
+
+STATUS.md: UPDATED / REVIEWED
+MILESTONES.md: UPDATED / REVIEWED
+INDEX.plan: UPDATED / REVIEWED
+ARCHITECTURE.md: UPDATED / REVIEWED
+DECISIONS.md: UPDATED / REVIEWED
+Domain docs: ...
+
+Git status:
+Commit: <sha>
+Tag: <tag or none>
+GitHub issue updated: YES / NO
+
+Remaining work:
+- ...
+```
+
+Der Agent darf **erst danach** zum nächsten Milestone wechseln.
+
+---
+
+# 9. OmniGrid Primus impetus — Hauptreihenfolge
+
+## M00 — Agent-/Dokumentations-Baseline
+
+Noch keine Featureentwicklung.
+
+Ziele:
+
+- `INDEX.plan` auf OmniGrid/aktuellen Agentenworkflow bringen;
+- Primus-impetus-Read-First-Reihenfolge sauber dokumentieren;
+- Graphify-Regeln aufnehmen;
+- AST-vs-Graphify-Trennung dokumentieren;
+- `docs/MILESTONES.md` mit aktuellem Plan abgleichen;
+- `docs/STATUS.md` auf aktuellen Zustand bringen;
+- keine persistenten technischen IDs kosmetisch umbenennen.
+
+**Gate:** Verhalten/Gameplay unverändert.
+
+**Pflicht:** Commit + GitHub-Dokumentation.
+
+---
+
+## M01 — #14 frühe OmniGrid-Umbenennung
+
+Nur sichere Branding-/Projektflächen:
+
+- README;
+- Fenster-/Anwendungstitel;
+- Startup-Banner;
+- Entwicklerdokumentation;
+- Build-/Produktnamen in kleinen kontrollierten Schritten.
+
+Nicht blind umbenennen:
+
+- persistente Block-/Prototype-IDs;
+- Mod-Namespaces;
+- Save-Schema-IDs;
+- Worldgen-Kompatibilitäts-IDs;
+- spätere RocksDB-Keyspaces;
+- Protokollidentitäten.
+
+**Pflicht:** eigener Commit für diesen Milestone.
+
+---
+
+## M02 — #8 Worldgen-Baseline
+
+Ziele:
+
+- Desert Mask verbreitern;
+- keine reine Threshold-Pfusche;
+- `BiomeDef::weight`-Semantik klären;
+- Statistiktests für Seed 1337 + mindestens einen weiteren Seed;
+- Determinismus;
+- Hierarchie-/Grenztests;
+- relevante Worldgen-Doku aktualisieren.
+
+Danach Worldgen-Baseline wieder einfrieren.
+
+---
+
+# CORE SPINE
+
+## M03 — #3 Contracts + Prototype Foundation
+
+Nur früher #3-Teil:
+
+- Ownership-/Dependency Contracts;
+- stabile namespaced IDs;
+- generischer World/Block/Object Ref;
+- Content-Root-Vertrag;
+- `MODS/Default`;
+- Prototype Registry;
+- genau ein echter Pilotblock.
+
+Noch keine vollständige ECS-/Persistence-/Event-Welt.
+
+---
+
+## M04 — #3 Sidecar Pilot
+
+- generisches Sidecar Framework;
+- Lazy Allocation;
+- Lazy Destruction;
+- Orientation als erster Pilot;
+- Tests für leer/belegt;
+- Serialisierungs-/Versionsmetadaten vorbereiten.
+
+Temperature/Damage erst nach bewiesenem Orientation-Pilot.
+
+---
+
+## M05 — #3 Unified World State
+
+- `get`;
+- `has`;
+- `set`;
+- Prototype defaults;
+- Sidecar Resolver;
+- zentrale Blockmutation;
+- Dirty Hooks;
+- Mesh-/Neighbor-Invalidation;
+- Persistence-Dirty-Abstraktion ohne RocksDB.
+
+Harte Regel:
+
+Lua/Gamecode darf nicht wissen, ob ein Wert aus Prototype, Sidecar oder später ECS kommt.
+
+---
+
+## M06 — #3 Minimal Actions + #18 Player Interaction
+
+Minimal Actions:
+
+- `place_block`;
+- `remove_block`;
+- Target;
+- Payload;
+- Result;
+- Handler;
+- Validation.
+
+Dann #18:
+
+- Voxel Raycast;
+- Hit Block;
+- Face;
+- Adjacent Position;
+- Chunkgrenzen;
+- Block entfernen;
+- Block setzen;
+- minimale Creative-Auswahl.
+
+Pflichtpfad:
+
+```text
+Input
+-> Raycast
+-> Action
+-> World State
+-> Dirty/Invalidation
+-> sichtbare Änderung
+```
+
+Wenn dafür Input direkt den ChunkManager mutieren muss:
+
+**STOP. #3 korrigieren.**
+
+---
+
+## M07 — #3 Events + #7 Lua Callback Cache
+
+#3:
+
+- Signal Registry;
+- Slot Registry;
+- Action Registry generalisieren;
+- Payload Schemas;
+- Validation;
+- Native Handler;
+- Lua Handler;
+- bounded A/B Queues;
+- No-op erzeugt keinen neuen Event;
+- Cactus Contact als zweiter Proof Case.
+
+#7:
+
+- `luaL_ref` Callback Handles;
+- RAII/Lifetime;
+- `luaL_unref`;
+- Hot Reload;
+- stale-reference Tests;
+- Fehlerkontext;
+- Benchmark.
+
+Bytecode Cache optional.
+
+---
+
+## M08 — #3 Hot State / enTT
+
+- enTT nur als aktive Projektion;
+- ECS Mapping Sidecar;
+- Promotion;
+- Demotion;
+- State Transfer;
+- Cold → Warm → Hot;
+- Hot → Warm;
+- eine Furnace-/Testinstanz.
+
+Pflichtbeweis:
+
+Die öffentliche World-State-API bleibt vor/während/nach Promotion gleich.
+
+---
+
+## M09 — #3 RocksDB Persistence
+
+- backend-neutrales Interface;
+- Dirty Tracking;
+- Serializer;
+- Schema-Versionen;
+- IO Queue;
+- Worker;
+- RocksDB;
+- WriteBatch;
+- stabile Keys;
+- Recovery.
+
+Pflichttest:
+
+1. generierten Block entfernen;
+2. Spielerblock setzen;
+3. beenden;
+4. neu starten;
+5. Base World regenerieren;
+6. Deltas anwenden;
+7. beide Änderungen wieder vorhanden.
+
+Gameplaycode kennt RocksDB nicht.
+
+---
+
+## M10 — #13 Embedded Client/Server
+
+- GameServer owns authoritative World State;
+- Server owns ECS;
+- Server owns Persistence;
+- ClientSession;
+- ServerSession;
+- Transport Interface;
+- InProcess/Loopback;
+- zuerst #18 `place_block`/`remove_block`;
+- alten direkten Übergang entfernen;
+- Determinism-/Content-Handshake;
+- Client rekonstruiert Base World;
+- Server liefert Deltas.
+
+Harte Regel:
+
+Standalone = Client + Embedded Server.
+
+Kein anderer Gameplaypfad für Singleplayer.
+
+---
+
+# CONSTRUCTION SPINE
+
+## M11 — #16 Construction Foundation
+
+- `get`;
+- `set`;
+- `setBulk`;
+- Bulk Dirty/Invalidation;
+- Chunkgrenzen;
+- logische Properties;
+- Lua `draw`;
+- `fill`;
+- `floor`;
+- `wall`;
+- `line`;
+- `box`;
+- `hollowBox`;
+- eine gekrümmte Form;
+- Writer-Abstraktion.
+
+Pflichtbeweis:
+
+**100 × 100 Floor ohne 10.000 Lua → C++ Einzelcalls.**
+
+Dann genau einen existierenden Consumer migrieren.
+
+---
+
+## M12 — #17 Construction Blueprints
+
+- `BlueprintWriter` nutzt #16;
+- keine zweite Geometry Engine;
+- Blueprint ID/Anchor/Bounds;
+- kompakte Shape-Repräsentation;
+- A/B Selection;
+- 100 × 100 Ghost Floor;
+- missing/fulfilled/conflict;
+- chunk-aware Ghost Rendering;
+- Construction Job;
+- Resource Requirements;
+- bounded Task Decomposition;
+- generischer Test Executor.
+
+Keine Village-/Drone-KI im Blueprint-Core.
+
+---
+
+# 10. Parallele Lanes
+
+Diese Issues können parallel zur Core-Spine bearbeitet werden, wenn ihre lokalen Voraussetzungen erfüllt sind.
+
+Ein Agent muss trotzdem **einen begonnenen Milestone sauber abschließen und committen**, bevor er die Baustelle wechselt.
+
+## P01 — #4 Render / Streaming / LOD
+
+Reihenfolge:
+
+1. Surface Metadata
+2. camera-aware Queue
+3. LOD Meshes
+4. LOD Transitions/Seams
+5. Near/Far Residency Split
+6. Visibility Metadata
+7. Far Worldgen Preview
+
+Ab M06 muss Player-Blockedit als Invalidation-/LOD-Regressionstest dienen.
+
+---
+
+## P02 — #11 Vegetation
+
+Nach stabiler Worldgen-/Content-Basis:
+
+1. Context Audit
+2. generische Vegetation
+3. Desert
+4. Riparian
+5. Underwater
+6. Multi-Block
+7. Balancing
+
+#16 später wiederverwenden, wo sinnvoll.
+
+---
+
+## P03 — #6 RmlUi
+
+RmlUi-Basis darf früh entstehen.
+
+Gameplay-mutierende UI-Aktionen erst über #3 Actions und später #13 Server Boundary.
+
+Keine UI → ECS/Sidecar/World Direktmutation.
+
+---
+
+## P04 — #9 Audio
+
+1. Abstraction
+2. Profiles
+3. 3D
+4. Loops/Buses
+5. Doppler
+6. Environment
+7. Limits
+
+#18 `place`/`break` sind ideale reale Event-Consumer.
+
+---
+
+## P05 — #10 Celestial
+
+1. WorldClock
+2. Body Registry
+3. Orbit
+4. Sky Space
+5. Lighting
+6. Moon Phases
+7. Multiple Bodies
+8. Seasons
+
+Nach M10 wird Shared World Time server-authoritativ.
+
+---
+
+## P06 — #12 Fluids
+
+Nicht vor brauchbaren:
+
+- Sidecars;
+- Unified World State;
+- bounded Queues;
+- Persistence-Abstraktion.
+
+Reihenfolge:
+
+1. Fluid State
+2. Gravity
+3. Horizontal Balance
+4. `delta <= 1/8 = REST`
+5. bounded A/B Queues
+6. Overfill
+7. Chunk Boundaries
+8. Persistence
+9. Rendering
+10. Mod-defined Fluid
+
+Keine eigene Fluid-DB.
+Keine ECS-Entity pro Fluidzelle.
+
+---
+
+## P07 — #5 Villages
+
+Reihenfolge:
+
+1. Anchor
+2. Terrain Query
+3. VillagePlan
+4. Roads/Plots
+5. Procedural Building über #16
+6. Cross Chunk
+7. Version/Persistence
+8. Aggregate Society
+9. Hot NPCs
+10. Jobs über #17
+
+Keine Village-eigene Geometry Engine.
+
+---
+
+# 11. Harte STOP-Bedingungen
+
+Der Agent muss die Architektur korrigieren, wenn einer dieser Fälle entsteht:
+
+- Lua braucht rohe Sidecars;
+- Lua muss wissen, ob ein Objekt ECS-backed ist;
+- UI mutiert World/ECS/Sidecars direkt;
+- Input mutiert `ChunkManager` direkt;
+- Construction und Blueprint besitzen verschiedene Shape-Libraries;
+- Village erfindet eine dritte Shape-Library;
+- Fluid erfindet eine zweite Queue;
+- Fluid erfindet eigene Persistence;
+- Client schreibt Saves;
+- Client besitzt authoritative Mutable World State;
+- Singleplayer umgeht den Server;
+- Server benötigt OgreNext;
+- Worldgen hängt von Thread-/Chunk-Reihenfolge ab;
+- Default-Contentname wird C++-Gameplay-Spezialfall;
+- der Patch wächst massiv über den Milestone-Scope hinaus;
+- Architekturregeln sollen abgeschwächt werden, nur damit der Patch grün wird.
+
+Dann gilt:
+
+> **Nicht den Gate passend machen. Den Patch passend machen.**
+
+---
+
+# 12. Commit- und Milestone-Politik
+
+## Jeder Milestone endet mit einem Commit
+
+Keine Ausnahme.
+
+Ein Milestone darf mehrere kleine vorbereitende Commits enthalten, aber es muss einen klaren Abschlusscommit geben, der den Milestone-Zustand repräsentiert.
+
+## Empfohlene Commit-Konvention
+
+```text
+feat(scope): description (#issue)
+fix(scope): description (#issue)
+refactor(scope): description (#issue)
+docs(scope): description (#issue)
+test(scope): description (#issue)
+```
+
+Beispiele:
+
+```text
+feat(worldstate): add prototype registry foundation (#3)
+feat(interaction): complete voxel place/remove slice (#18)
+feat(persistence): persist world deltas through RocksDB backend (#3)
+feat(server): route block actions through embedded server (#13)
+```
+
+## Keine Fake-Milestones
+
+Kein Milestone-Commit, wenn:
+
+- Build/Test-Gates nicht gelaufen sind;
+- Dokumentation nicht synchron ist;
+- Graphify veraltet ist;
+- fremde Änderungen enthalten sind;
+- der Agent nicht sagen kann, welche Acceptance Criteria erfüllt wurden.
+
+---
+
+# 13. GitHub-Kommunikation ist Teil der Arbeit
+
+Zu jedem abgeschlossenen Milestone gehört ein GitHub-Update.
+
+Der Agent dokumentiert im Issue:
+
+```text
+Milestone:
+Commit:
+Tests:
+Architecture gate:
+clang-tidy AST:
+Build:
+Graphify:
+Docs updated:
+Remaining work:
+```
+
+Wenn ein Issue vollständig abgeschlossen ist:
+
+- Acceptance Criteria nochmal einzeln prüfen;
+- erst dann schließen.
+
+Wenn nur ein Teil abgeschlossen ist:
+
+- Issue offen lassen;
+- Milestone-Status kommentieren;
+- nächsten offenen Teil benennen.
+
+Master-Tracker #15 soll den realen Stand widerspiegeln.
+
+---
+
+# 14. Primus-impetus-Hauptstraße
+
+```text
+M00 Agent-/Doku-Baseline
+  ↓
+M01 Rename
+  ↓
+M02 Worldgen Baseline
+  ↓
+M03 Contracts + Prototypes
+  ↓
+M04 Sidecars
+  ↓
+M05 Unified World State
+  ↓
+M06 Actions + echte Blockinteraktion
+  ↓
+M07 Events + Lua Callback Cache
+  ↓
+M08 enTT Hot State
+  ↓
+M09 RocksDB Persistence
+  ↓
+M10 Embedded Client/Server
+  ↓
+M11 Construction Foundation
+  ↓
+M12 Construction Blueprints
+```
+
+Parallel, sofern Voraussetzungen erfüllt:
+
+```text
+#4 Render/LOD
+#6 UI
+#9 Audio
+#10 Celestial
+#11 Vegetation
+#12 Fluids
+#5 Villages
+```
+
+---
+
+# 15. Warum #18 mitten im Core-Pfad liegt
+
+#18 ist der erste echte Architekturtest.
+
+Sobald World State und minimale Actions stehen, muss ein Spieler wirklich:
+
+- einen Block raycasten;
+- ihn entfernen;
+- einen anderen Block platzieren;
+- eine sichtbare Meshänderung bekommen;
+- Dirty State erzeugen.
+
+Erst danach werden Eventsystem, ECS, Persistence und Netzwerk weiter ausgebaut.
+
+Wenn dieser kleine Pfad nicht sauber funktioniert, ist die Foundation nicht bewiesen.
+
+Die Engine-Spine muss sich an echtem Gameplay bewähren, nicht nur an Interfaces und Unit-Tests.
+
+---
+
+# 16. Endzustand von Primus impetus
+
+Primus impetus ist erfolgreich, wenn OmniGrid eine gemeinsame, bewiesene Spine besitzt:
+
+- deterministischer Worldgen;
+- stabile Prototypes/IDs;
+- sparse Sidecars;
+- eine Unified World State API;
+- echte Player-Blockinteraktion über Actions;
+- zentrale Dirty-/Invalidation-Hooks;
+- bounded Events;
+- Lua Callback Cache;
+- enTT nur für Hot State;
+- RocksDB Base+Delta Persistence;
+- Embedded Server auch im Singleplayer;
+- gemeinsame Construction-Geometrie;
+- Blueprints ohne zweite Architektur;
+- aktuelle Agent-/Architektur-/Statusdokumentation;
+- aktueller Graphify Knowledge Graph;
+- reproduzierbare grüne Git-Milestones;
+- nachvollziehbare GitHub-Historie mit Issue ↔ Commit ↔ Milestone-Zuordnung.
+
+> **Small patches. Hard boundaries. Real proof cases. Green tests. Updated docs. Updated graph. Commit every milestone. Document it on GitHub. No second architecture.**
