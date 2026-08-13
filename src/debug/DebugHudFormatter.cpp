@@ -36,6 +36,7 @@ namespace debug
         out.setf( std::ios::fixed );
         out << std::setprecision( 2 );
         out << "Clonecraft debug [F5]\n";
+        out << "Jump: arrows=Block  Ctrl=Chunk  Alt=Group  Shift=Section  Ctrl+Alt=Region  Ctrl+Alt+Shift=Sector\n";
         out << "FPS: " << s.latestFps << "  avg: " << s.averageFps
             << "  frame: " << s.latestFrameMs << " ms (avg " << s.averageFrameMs << ")\n";
         out << "Render XYZ:  " << s.renderLocalX << " / " << s.renderLocalY << " / " << s.renderLocalZ << '\n';

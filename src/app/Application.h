@@ -44,6 +44,9 @@ namespace app
         bool initializeWorld();
         world::WorldPosition cameraWorldPosition() const;
         world::BlockAddress cameraBlock() const;
+        void handleHierarchyJumpKey( int scancode );
+        void jumpCameraHierarchy( world::HierarchyLevel level, std::int64_t dx,
+                                  std::int64_t dz );
         void maybeRebaseDynamicSpace();
         void moveCamera( float dtSeconds );
         void updateCameraView();

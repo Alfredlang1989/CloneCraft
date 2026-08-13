@@ -19,6 +19,20 @@ namespace app
     namespace
     {
         constexpr std::int64_t CAMERA_START_Y = 50;
+
+        const char *hierarchyLevelName( world::HierarchyLevel level )
+        {
+            switch( level )
+            {
+            case world::HierarchyLevel::Block: return "block";
+            case world::HierarchyLevel::Chunk: return "chunk";
+            case world::HierarchyLevel::Group: return "chunkgroup";
+            case world::HierarchyLevel::Section: return "section";
+            case world::HierarchyLevel::Region: return "region";
+            case world::HierarchyLevel::Sector: return "sector";
+            }
+            return "unknown";
+        }
     }
 
     Application::~Application() { shutdown(); }
@@ -56,6 +70,9 @@ namespace app
                 mRenderer->setDebugOverlayVisible( show );
                 if( show ) updateDebugOverlay( std::chrono::steady_clock::now(), true );
             }
+            else if( scancode == SDL_SCANCODE_LEFT || scancode == SDL_SCANCODE_RIGHT ||
+                     scancode == SDL_SCANCODE_UP || scancode == SDL_SCANCODE_DOWN )
+                handleHierarchyJumpKey( scancode );
         } );
 
         mRenderer = std::make_unique<render::OgreRenderer>();
@@ -75,7 +92,7 @@ namespace app
         if( !mSelectionRenderer->initialize() ) { core::logError( "Block selection renderer initialization failed" ); return false; }
         updateCameraView();
         mPlatform->setRelativeMouseMode( true );
-        core::logInfo( "Mouse captured; ESC = shutdown, F = flashlight, F5 = debug HUD" );
+        core::logInfo( "Mouse captured; ESC = shutdown, F = flashlight, F5 = debug HUD; arrows = hierarchy jump" );
         mLastTick = std::chrono::steady_clock::now();
         mLastDebugUpdate = mLastTick;
         mRunning = true;
@@ -116,6 +133,68 @@ namespace app
     world::WorldPosition Application::cameraWorldPosition() const { return mDynamicBridge.toWorld( mCamera.position() ); }
     world::BlockAddress Application::cameraBlock() const { return cameraWorldPosition().blockAddress(); }
 
+    void Application::handleHierarchyJumpKey( int scancode )
+    {
+        const bool ctrl = mInput->isKeyDown( SDL_SCANCODE_LCTRL ) ||
+                          mInput->isKeyDown( SDL_SCANCODE_RCTRL );
+        const bool alt = mInput->isKeyDown( SDL_SCANCODE_LALT ) ||
+                         mInput->isKeyDown( SDL_SCANCODE_RALT );
+        const bool shift = mInput->isKeyDown( SDL_SCANCODE_LSHIFT ) ||
+                           mInput->isKeyDown( SDL_SCANCODE_RSHIFT );
+
+        world::HierarchyLevel level = world::HierarchyLevel::Block;
+        if( ctrl && alt && shift ) level = world::HierarchyLevel::Sector;
+        else if( ctrl && alt ) level = world::HierarchyLevel::Region;
+        else if( shift && !ctrl && !alt ) level = world::HierarchyLevel::Section;
+        else if( alt && !ctrl && !shift ) level = world::HierarchyLevel::Group;
+        else if( ctrl && !alt && !shift ) level = world::HierarchyLevel::Chunk;
+        else if( ctrl || alt || shift )
+        {
+            core::logInfo( "Hierarchy jump modifier combination is unassigned" );
+            return;
+        }
+
+        std::int64_t dx = 0;
+        std::int64_t dz = 0;
+        if( scancode == SDL_SCANCODE_LEFT ) dx = -1;
+        else if( scancode == SDL_SCANCODE_RIGHT ) dx = 1;
+        else if( scancode == SDL_SCANCODE_UP ) dz = -1;
+        else if( scancode == SDL_SCANCODE_DOWN ) dz = 1;
+        else return;
+
+        jumpCameraHierarchy( level, dx, dz );
+    }
+
+    void Application::jumpCameraHierarchy( world::HierarchyLevel level, std::int64_t dx,
+                                           std::int64_t dz )
+    {
+        const world::WorldPosition current = cameraWorldPosition();
+        world::BlockAddress targetBlock{};
+        if( !world::tryOffsetHierarchy( current.blockAddress(), level, dx, 0, dz, targetBlock ) )
+        {
+            core::logInfo( std::string( "Hierarchy jump rejected at world address limit: " ) +
+                           hierarchyLevelName( level ) );
+            return;
+        }
+
+        const world::WorldPosition target = world::WorldPosition::fromBlockAddress(
+            targetBlock, current.fractionX(), current.fractionY(), current.fractionZ() );
+
+        // A hierarchy jump can span values that cannot be represented as a
+        // DynamicSpace float delta. Move the exact world anchor to the target
+        // and leave only the sub-block fraction in local camera space.
+        mDynamicBridge.setAnchor( targetBlock );
+        mCamera.setPosition( { current.fractionX(), current.fractionY(), current.fractionZ() } );
+        mRenderAnchor.teleportTo( target );
+
+        core::logInfo( std::string( "Hierarchy camera jump: " ) + hierarchyLevelName( level ) +
+                       " dx=" + std::to_string( dx ) + " dz=" + std::to_string( dz ) );
+
+        updateCameraView();
+        updateBlockTarget();
+        updateDebugOverlay( std::chrono::steady_clock::now(), true );
+    }
+
     void Application::maybeRebaseDynamicSpace()
     {
         const spatial::dynamic::RebaseDelta delta = mDynamicSpace.rebaseDeltaFor( mCamera.position() );
@@ -131,7 +210,14 @@ namespace app
     {
         const double fwd = ( mInput->isKeyDown( SDL_SCANCODE_W ) ? 1.0 : 0.0 ) - ( mInput->isKeyDown( SDL_SCANCODE_S ) ? 1.0 : 0.0 );
         const double right = ( mInput->isKeyDown( SDL_SCANCODE_D ) ? 1.0 : 0.0 ) - ( mInput->isKeyDown( SDL_SCANCODE_A ) ? 1.0 : 0.0 );
-        const double up = ( mInput->isKeyDown( SDL_SCANCODE_SPACE ) ? 1.0 : 0.0 ) - ( mInput->isKeyDown( SDL_SCANCODE_LSHIFT ) ? 1.0 : 0.0 );
+        const bool arrowHeld = mInput->isKeyDown( SDL_SCANCODE_LEFT ) ||
+                               mInput->isKeyDown( SDL_SCANCODE_RIGHT ) ||
+                               mInput->isKeyDown( SDL_SCANCODE_UP ) ||
+                               mInput->isKeyDown( SDL_SCANCODE_DOWN );
+        const bool descend = !arrowHeld && ( mInput->isKeyDown( SDL_SCANCODE_LSHIFT ) ||
+                                             mInput->isKeyDown( SDL_SCANCODE_RSHIFT ) );
+        const double up = ( mInput->isKeyDown( SDL_SCANCODE_SPACE ) ? 1.0 : 0.0 ) -
+                          ( descend ? 1.0 : 0.0 );
         mCamera.update( dtSeconds, fwd, right, up );
         maybeRebaseDynamicSpace();
     }

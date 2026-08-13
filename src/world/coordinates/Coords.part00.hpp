@@ -118,6 +118,17 @@ namespace world
         friend constexpr auto operator<=>( const RelativeI64 &, const RelativeI64 & ) = default;
     };
 
+    /** Exact address tier used by debug/navigation teleports. */
+    enum class HierarchyLevel : std::uint8_t
+    {
+        Block,
+        Chunk,
+        Group,
+        Section,
+        Region,
+        Sector
+    };
+
     inline constexpr GroupAddress originGroupAddress() { return {}; }
     inline constexpr ChunkAddress originChunkAddress() { return {}; }
     inline constexpr BlockAddress originBlockAddress() { return {}; }

@@ -1,5 +1,84 @@
         }
 
+
+        /**
+         * Offsets one selected hierarchy digit while preserving every lower
+         * digit. This is intended for exact debug/navigation teleports.
+         */
+        inline bool tryOffsetHierarchyAxis( AxisAddress base, HierarchyLevel level,
+                                            std::int64_t delta, AxisAddress &out ) noexcept
+        {
+            if( level == HierarchyLevel::Block )
+                return tryOffsetAxis( base, delta, out );
+
+            if( level == HierarchyLevel::Sector )
+            {
+                if( !tryAddI64( base.sector, delta, base.sector ) ) return false;
+                out = base;
+                return true;
+            }
+
+            std::int64_t *digit = nullptr;
+            std::int64_t radix = 0;
+            switch( level )
+            {
+            case HierarchyLevel::Chunk:
+                digit = &base.chunk;
+                radix = CHUNKS_PER_GROUP_EDGE;
+                break;
+            case HierarchyLevel::Group:
+                digit = &base.group;
+                radix = GROUPS_PER_SECTION_EDGE;
+                break;
+            case HierarchyLevel::Section:
+                digit = &base.section;
+                radix = SECTIONS_PER_REGION_EDGE;
+                break;
+            case HierarchyLevel::Region:
+                digit = &base.region;
+                radix = REGIONS_PER_SECTOR_EDGE;
+                break;
+            case HierarchyLevel::Block:
+            case HierarchyLevel::Sector:
+                return false;
+            }
+
+            std::int64_t carry = floorDiv( delta, radix );
+            const std::int64_t remainder = floorMod( delta, radix );
+            const clonecraft_i128 sum = static_cast<clonecraft_i128>( *digit ) + remainder;
+            *digit = static_cast<std::int64_t>( sum % radix );
+            if( !tryAddI64( carry, static_cast<std::int64_t>( sum / radix ), carry ) )
+                return false;
+
+            switch( level )
+            {
+            case HierarchyLevel::Chunk:
+                if( !propagateDigit( base.group, GROUPS_PER_SECTION_EDGE, carry ) ||
+                    !propagateDigit( base.section, SECTIONS_PER_REGION_EDGE, carry ) ||
+                    !propagateDigit( base.region, REGIONS_PER_SECTOR_EDGE, carry ) )
+                    return false;
+                break;
+            case HierarchyLevel::Group:
+                if( !propagateDigit( base.section, SECTIONS_PER_REGION_EDGE, carry ) ||
+                    !propagateDigit( base.region, REGIONS_PER_SECTOR_EDGE, carry ) )
+                    return false;
+                break;
+            case HierarchyLevel::Section:
+                if( !propagateDigit( base.region, REGIONS_PER_SECTOR_EDGE, carry ) )
+                    return false;
+                break;
+            case HierarchyLevel::Region:
+                break;
+            case HierarchyLevel::Block:
+            case HierarchyLevel::Sector:
+                return false;
+            }
+
+            if( !tryAddI64( base.sector, carry, base.sector ) ) return false;
+            out = base;
+            return true;
+        }
+
         template <typename OffsetFn>
         inline bool boundedAxisDelta( const AxisAddress &position, const AxisAddress &origin,
                                       std::int64_t maxAbs, std::int64_t &out,

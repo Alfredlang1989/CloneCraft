@@ -51,6 +51,29 @@
         return out;
     }
 
+    inline bool tryOffsetHierarchy( const BlockAddress &base, HierarchyLevel level,
+                                    std::int64_t dx, std::int64_t dy, std::int64_t dz,
+                                    BlockAddress &out ) noexcept
+    {
+        detail::AxisAddress x{}, y{}, z{};
+        if( !detail::tryOffsetHierarchyAxis( blockAxisX( base ), level, dx, x ) ||
+            !detail::tryOffsetHierarchyAxis( blockAxisY( base ), level, dy, y ) ||
+            !detail::tryOffsetHierarchyAxis( blockAxisZ( base ), level, dz, z ) )
+            return false;
+        out = fromAxes( x, y, z );
+        return true;
+    }
+
+    inline BlockAddress offsetHierarchy( const BlockAddress &base, HierarchyLevel level,
+                                         std::int64_t dx, std::int64_t dy,
+                                         std::int64_t dz )
+    {
+        BlockAddress out{};
+        if( !tryOffsetHierarchy( base, level, dx, dy, dz, out ) )
+            throw std::overflow_error( "hierarchical address navigation crossed SectorCoord range" );
+        return out;
+    }
+
     inline bool blockDeltaWithin( const BlockAddress &position, const BlockAddress &origin,
                                   std::int64_t maxAbs, RelativeI64 &out ) noexcept
     {
