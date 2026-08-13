@@ -182,7 +182,15 @@ namespace render
             if( !createBlockMaterial( blockId, def ) )
                 return false;
         }
-        return !mMaterials.empty();
+        if( mMaterials.empty() )
+        {
+            // No content root: the core must still start, just with nothing
+            // to render. Callers render an empty world instead of aborting.
+            core::logWarn( "No block materials created (empty block registry); "
+                           "starting with an empty world" );
+            return true;
+        }
+        return true;
     }
 
     Ogre::TextureGpu *ChunkWorldRenderer::loadConfiguredTexture( const world::BlockDef &def,

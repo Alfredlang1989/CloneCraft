@@ -18,14 +18,17 @@
   hierarchy/boundary and normalization tests added for seed 1337 and seed 4242
   (`tests/TestBiomeDistribution.cpp`, 6 cases); `docs/WORLDGEN.md` documents
   the competition math and the frozen distribution baseline.
-- M03 — Contracts + prototype foundation (#3): **in progress**. Content root
-  contract (`MODS/<mod>`, `MODS/Default` fallback, empty-root core start,
-  path-traversal-safe mod names) in `config::ContentRoot`; `prototypes.json`
-  registry with stable namespaced ids, load-order-independent FNV-1a runtime
-  handles (`PrototypeIdTable`, collision detection), block-to-prototype bridge
-  and `WorldObjectRef`; pilot block `default:cactus` (`core:cactus` block);
-  `settings.json` gains the `mod` key; content moved `data/` -> `MODS/Default/`;
-  ownership contract documented in `docs/ARCHITECTURE.md`. Suites: 18/18 PASS.
+- M03 — Contracts + prototype foundation (#3): **done** (committed `414f79d`,
+  review fixes in a follow-up commit). Content root contract (`MODS/<mod>`,
+  `MODS/Default` fallback, executable-relative resolution, empty-root core
+  start, path-traversal-safe mod names) in `config::ContentRoot`;
+  `prototypes.json` registry with stable namespaced ids, load-order-independent
+  FNV-1a runtime handles (`PrototypeIdTable`, collision detection), unique
+  block claims and block-to-prototype bridge + `WorldObjectRef`; namespaced
+  ids enforced for blocks/biomes/resources too; pilot block `default:cactus`
+  (`core:cactus` block); `settings.json` gains the `mod` key; content moved
+  `data/` -> `MODS/Default/`; ownership contract documented in
+  `docs/ARCHITECTURE.md`. Suites: 18/18 PASS.
 - Core spine #3 (sidecars/world state/actions/events/enTT/RocksDB),
   #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
   #16/#17 (construction): **not started**.

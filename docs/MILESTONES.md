@@ -50,19 +50,21 @@ Kept as history; the roadmap below replaces them as the current plan.
   hierarchy invariance, normalization and the weight multiplier;
   `docs/WORLDGEN.md` gains the competition section; all gates PASS (16/16).
 
-- **M03 — #3 Contracts + Prototype Foundation ◐**
+- **M03 — #3 Contracts + Prototype Foundation ✔**
   Ownership/dependency contracts; stable namespaced ids; generic
   world/block/object ref; content-root contract; `MODS/Default`; prototype
   registry; exactly one real pilot block. No full ECS/persistence/event world yet.
-  Status: implementation done, commit pending. Content root contract
-  (`config::ContentRoot`, settings `mod` key, empty-root core start,
-  path-traversal-safe names); content moved `data/` -> `MODS/Default/`;
-  `prototypes.json` registry (`RegistryLoader::parsePrototypes`, cross-ref
+  Status: done (committed `414f79d`, review fixes in a follow-up commit). Content root
+  contract (`config::ContentRoot`, settings `mod` key, executable-relative
+  resolution, empty-root core start, path-traversal-safe names); content moved
+  `data/` -> `MODS/Default/`; `prototypes.json` registry
+  (`RegistryLoader::parsePrototypes`, cross-ref + unique-block-claim
   validation) with stable FNV-1a handles (`PrototypeIdTable`, collision
-  rejection) and `WorldObjectRef` + `prototypeForBlock` bridge; pilot
-  `default:cactus` (new `core:cactus` cross block); ownership contract in
-  `docs/ARCHITECTURE.md` "Content root"; new suites `content_root` (6 cases)
-  and `prototypes` (10 cases); gates PASS (18/18 ctest suites).
+  rejection) and `WorldObjectRef` + `prototypeForBlock` bridge; namespaced ids
+  enforced for all registries; pilot `default:cactus` (new `core:cactus` cross
+  block); ownership contract in `docs/ARCHITECTURE.md` "Content root"; new
+  suites `content_root` (6 cases) and `prototypes` (12 cases); gates PASS
+  (18/18 ctest suites).
 
 - **M04 — #3 Sidecar Pilot ◻**
   Generic sidecar framework; lazy allocation; lazy destruction; orientation as

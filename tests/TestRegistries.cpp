@@ -437,7 +437,7 @@ namespace
             ResourceRegistry resources;
             RegistryLoader::parseResources(
                 nlohmann::json::parse( R"({ "resources": [
-                    { "id": "r", "displayName": "R", "blockId": "core:stone", "minY": 99, "maxY": 1 }
+                    { "id": "core:r", "displayName": "R", "blockId": "core:stone", "minY": 99, "maxY": 1 }
                 ] })" ),
                 "test-resources.json", resources, blocks );
         }, "minY' > 'maxY'" );
@@ -463,6 +463,41 @@ namespace
                 ] })" ),
                 "test-resources.json", resources, blocks );
         }, "chance' must be in 0..1" );
+    }
+
+    TEST_CASE( blocks_require_namespaced_ids )
+    {
+        expectRegistryError( [] {
+            loadBlocks( R"({ "blocks": [ { "id": "stone", "displayName": "Stone" } ] })" );
+        }, "must be namespaced as <namespace>:<name>" );
+    }
+
+    TEST_CASE( biomes_require_namespaced_ids )
+    {
+        expectRegistryError( [] {
+            const BlockRegistry blocks = loadBlocks(
+                R"({ "blocks": [ { "id": "core:stone", "displayName": "Stone" } ] })" );
+            BiomeRegistry biomes;
+            RegistryLoader::parseBiomes(
+                nlohmann::json::parse( R"({ "biomes": [
+                    { "id": "plains", "displayName": "Plains", "surfaceBlock": "core:stone" }
+                ] })" ),
+                "test-biomes.json", biomes, blocks );
+        }, "must be namespaced as <namespace>:<name>" );
+    }
+
+    TEST_CASE( resources_require_namespaced_ids )
+    {
+        expectRegistryError( [] {
+            const BlockRegistry blocks = loadBlocks(
+                R"({ "blocks": [ { "id": "core:stone", "displayName": "Stone" } ] })" );
+            ResourceRegistry resources;
+            RegistryLoader::parseResources(
+                nlohmann::json::parse( R"({ "resources": [
+                    { "id": "coal", "displayName": "Coal", "blockId": "core:stone" }
+                ] })" ),
+                "test-resources.json", resources, blocks );
+        }, "must be namespaced as <namespace>:<name>" );
     }
 
 } // namespace

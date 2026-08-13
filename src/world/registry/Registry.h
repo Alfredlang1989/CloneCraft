@@ -14,8 +14,8 @@ namespace world
      * mentions the source (file path or "inline"), the entry position and
      * what exactly is wrong, e.g.
      *
-     *   data/blocks.json: entry 2: missing required field 'displayName'
-     *   data/blocks.json: entry 3 (id=core:stone): duplicate id
+     *   MODS/Default/blocks.json: entry 2: missing required field 'displayName'
+     *   MODS/Default/blocks.json: entry 3 (id=core:stone): duplicate id
      */
     class RegistryError : public std::runtime_error
     {
@@ -162,19 +162,23 @@ namespace world
      *
      * Prototypes are the *logical* identity layer on top of physical block
      * ids: a voxel stores a compact block index, while gameplay refers to a
-     * stable namespaced prototype id. Several prototypes may share one
-     * block, and a prototype may later own sidecar data (M04+) and
-     * event/action hooks (M07).
+     * stable namespaced prototype id. The block-to-prototype mapping is
+     * strictly 1:1: each blockId is claimed by at most one prototype, so
+     * logical identity never depends on registry order. (If sharing a block
+     * between prototypes ever becomes necessary, identity must move into
+     * per-block state, e.g. sidecars/ECS (M04/M05) - not into this bridge.)
      *
-     * Ids are always namespaced (<namespace>:<name>, both non-empty) and
-     * never depend on load order. The runtime handle (PrototypeIdTable) is
-     * a stable hash of the id.
+     * A prototype may later own sidecar data (M04+) and event/action hooks
+     * (M07). Ids are always namespaced (<namespace>:<name>, both non-empty)
+     * and never depend on load order. The runtime handle (PrototypeIdTable)
+     * is a stable hash of the id.
      */
     struct PrototypeDef
     {
         std::string id;         // e.g. "default:cactus"
         std::string displayName;
-        std::string blockId;    // linked physical block (must exist in the BlockRegistry)
+        std::string blockId;    // linked physical block (must exist in the BlockRegistry,
+                                // claimed by at most one prototype)
         // Declared capabilities/slots, e.g. "contact.damage". Pure
         // declarations for now; the behaviour layer arrives with the
         // signal/slot system (M07).

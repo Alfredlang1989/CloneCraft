@@ -41,6 +41,17 @@ namespace world
             }
         }
 
+        /** Content ids are stable contracts and must be <namespace>:<name>. */
+        bool isNamespacedId( const std::string &id )
+        {
+            const std::size_t separator = id.find( ':' );
+            if( separator == std::string::npos )
+                return false;
+            if( separator == 0u || separator + 1u >= id.size() )
+                return false;
+            return id.find( ':', separator + 1u ) == std::string::npos;
+        }
+
         int hexNibble( char c )
         {
             if( c >= '0' && c <= '9' ) return c - '0';
@@ -236,6 +247,10 @@ namespace world
 
             BlockDef def;
             def.id = requireString( entry, source, index, "id" );
+            if( !isNamespacedId( def.id ) )
+                throw RegistryError( context( source, index ) +
+                                     ": block id '" + def.id +
+                                     "' must be namespaced as <namespace>:<name>" );
             def.displayName = requireString( entry, source, index, "displayName" );
             def.tags = optionalStringArray( entry, source, index, "tags" );
 
@@ -367,6 +382,10 @@ namespace world
 
             BiomeDef def;
             def.id = requireString( entry, source, index, "id" );
+            if( !isNamespacedId( def.id ) )
+                throw RegistryError( context( source, index ) +
+                                     ": biome id '" + def.id +
+                                     "' must be namespaced as <namespace>:<name>" );
             def.displayName = requireString( entry, source, index, "displayName" );
             def.surfaceBlock = requireString( entry, source, index, "surfaceBlock" );
             if( !blocks.contains( def.surfaceBlock ) )
@@ -612,6 +631,10 @@ namespace world
 
             ResourceDef def;
             def.id = requireString( entry, source, index, "id" );
+            if( !isNamespacedId( def.id ) )
+                throw RegistryError( context( source, index ) +
+                                     ": resource id '" + def.id +
+                                     "' must be namespaced as <namespace>:<name>" );
             def.displayName = requireString( entry, source, index, "displayName" );
             def.blockId = requireString( entry, source, index, "blockId" );
             if( !blocks.contains( def.blockId ) )
@@ -686,19 +709,6 @@ namespace world
         }
     }
 
-    namespace
-    {
-        bool isNamespacedId( const std::string &id )
-        {
-            const std::size_t separator = id.find( ':' );
-            if( separator == std::string::npos )
-                return false;
-            if( separator == 0u || separator + 1u >= id.size() )
-                return false;
-            return id.find( ':', separator + 1u ) == std::string::npos;
-        }
-    } // namespace
-
     void RegistryLoader::parsePrototypes( const json &root, const std::string &source,
                                           const BlockRegistry &blocks, PrototypeRegistry &out )
     {
@@ -711,6 +721,7 @@ namespace world
         const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
 
         int index = 0;
+        std::unordered_map<std::string, std::string> claimedBy;
         for( const json &entry : root["prototypes"] )
         {
             ++index;
@@ -741,6 +752,13 @@ namespace world
                 throw RegistryError( context( source, index ) + ": prototype '" + def.id +
                                      "' references unknown blockId '" + def.blockId + "'" );
 
+            if( claimedBy.contains( def.blockId ) )
+                throw RegistryError( context( source, index ) + ": prototype '" + def.id +
+                                     "' claims blockId '" + def.blockId +
+                                     "' which is already claimed by prototype '" +
+                                     claimedBy.at( def.blockId ) + "'" );
+
+            claimedBy.emplace( def.blockId, def.id );
             out.insert( def );
         }
     }

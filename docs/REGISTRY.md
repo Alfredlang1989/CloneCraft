@@ -153,15 +153,27 @@ duplicate capabilities and unknown fields are rejected with source/entry context
 
 `PrototypeIdTable` maps prototype ids to stable 32-bit handles (FNV-1a hash of
 the id). Handles never depend on load or insertion order, so the same content
-loaded in different orders always produces the same handle. Hash collisions are
-detected and rejected at construction time.
+loaded in different orders always produces the same handle. Hash collisions
+are detected and rejected at construction time; ids stay persistent strings,
+so a rejected collision is a hard error, never silent corruption.
+
+Scaling note: FNV-1a 32-bit collides with probability ~1.2% at 10 000 ids and
+~25% at 50 000 ids. That is acceptable for mod sets of the planned scale, and
+the deterministic rejection keeps it a *load-time configuration error* rather
+than a data hazard; if a very large mod ecosystem ever materialises, the
+handle width can grow to 64-bit without changing the stable-id contract.
 
 ### Block-to-prototype bridge
 
-`world::prototypeForBlock( registry, blockId )` returns the first prototype
-whose `blockId` matches, or `nullptr`. Most blocks are pure scenery and are not
-referenced by any prototype. `world::WorldObjectRef` (position + prototype id)
-is the M03 foundation of the unified world-state API (M05).
+The block-to-prototype mapping is strictly 1:1: every `blockId` is claimed by
+at most one prototype (duplicate claims are rejected at load time), so logical
+identity never depends on registry order. `world::prototypeForBlock( registry,
+blockId )` returns the owning prototype or `nullptr`; most blocks are pure
+scenery and are not referenced by any prototype. If sharing a block between
+prototypes ever becomes necessary, identity must move into per-block state
+(sidecars/ECS, M04/M05) - not into this bridge. `world::WorldObjectRef`
+(position + prototype id) is the M03 foundation of the unified world-state API
+(M05).
 
 ## Block semantic tags
 

@@ -30,7 +30,7 @@ namespace app
             mSettingsPath = config::defaultSettingsPath();
             mSettings = config::loadOrCreateSettings( mSettingsPath );
             core::logInfo( "Settings: " + mSettingsPath.string() );
-            mContentRoot = config::resolveContentRoot( ".", mSettings.mod );
+            mContentRoot = config::resolveContentRootFromCandidates( mSettings.mod );
             if( mContentRoot.path.empty() )
                 core::logWarn( "No content root found (MODS/" + mSettings.mod +
                                " and MODS/Default missing); starting without content" );

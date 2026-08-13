@@ -61,6 +61,11 @@ implements the contract:
 2. otherwise `MODS/Default` exists -> `Default` (fallback)
 3. otherwise -> empty path; the C++ core must still start without content
 
+The application resolves the content root relative to its own executable
+first (the build installs a `MODS` symlink next to the binary, see
+CMakeLists.txt) and falls back to the current working directory, so the game
+finds its content regardless of where it was launched from.
+
 Ownership is strict: the core owns *mechanisms* (JSON/Lua parsing, voxel
 storage, worldgen engine, registry/handle machinery); content owns *concepts*
 (cactus, furnaces, biomes, geology rules). Core code must never hardcode a

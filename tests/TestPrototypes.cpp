@@ -102,12 +102,22 @@ TEST_CASE( prototypes_block_bridge_resolves_pilot_block )
 TEST_CASE( prototypes_handles_are_stable_across_load_order )
 {
     const BlockRegistry blocks = loadRealBlocks();
-    const PrototypeRegistry a = parse( PILOT_JSON, blocks );
+    const std::string three = R"({
+      "prototypes": [
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "capabilities": ["contact.damage"] },
+        { "id": "default:sand", "displayName": "Sand", "blockId": "core:sand" },
+        { "id": "default:furnace", "displayName": "Furnace", "blockId": "core:stone" }
+      ]
+    })";
+    const PrototypeRegistry a = parse( three, blocks );
 
     PrototypeRegistry reversed;
     {
         const json root = json::parse( R"({
           "prototypes": [
+            { "id": "default:furnace", "displayName": "Furnace", "blockId": "core:stone" },
+            { "id": "default:sand", "displayName": "Sand", "blockId": "core:sand" },
             { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
               "capabilities": ["contact.damage"] }
           ]
@@ -118,7 +128,9 @@ TEST_CASE( prototypes_handles_are_stable_across_load_order )
     const PrototypeIdTable tableA( a );
     const PrototypeIdTable tableB( reversed );
     CHECK_EQ( tableA.size(), tableB.size() );
-    CHECK_EQ( tableA.handleOf( "default:cactus" ), tableB.handleOf( "default:cactus" ) );
+    CHECK_EQ( tableA.size(), std::size_t{ 3 } );
+    for( const std::string &id : a.ids() )
+        CHECK_EQ( tableA.handleOf( id ), tableB.handleOf( id ) );
     CHECK_EQ( tableA.handleOf( "default:cactus" ),
               PrototypeIdTable::hashId( "default:cactus" ) );
 }
@@ -177,6 +189,28 @@ TEST_CASE( prototypes_reject_duplicate_capabilities_and_unknown_fields )
     CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
         { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
           "hp": 10 } ]})", blocks ); } ) );
+}
+
+TEST_CASE( prototypes_block_claim_is_unique )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+    CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus" },
+        { "id": "default:cactus_alt", "displayName": "Other", "blockId": "core:cactus" } ]})", blocks ); } ) );
+}
+
+TEST_CASE( prototypes_reject_hash_collisions )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+
+    const std::uint32_t a = PrototypeIdTable::hashId( "t:ptz" );
+    const std::uint32_t b = PrototypeIdTable::hashId( "t:fveid" );
+    CHECK_EQ( a, b );
+
+    const PrototypeRegistry prototypes = parse( R"({"prototypes":[
+        { "id": "t:ptz", "displayName": "A", "blockId": "core:stone" },
+        { "id": "t:fveid", "displayName": "B", "blockId": "core:sand" } ]})", blocks );
+    CHECK( rejected( [&] { const PrototypeIdTable table( prototypes ); (void)table; } ) );
 }
 
 TEST_CASE( prototypes_missing_file_means_no_prototypes )

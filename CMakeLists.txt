@@ -193,6 +193,19 @@ if(OMNIGRID_BUILD_APP)
     omnigrid_camera
     omnigrid_dynamic
     omnigrid_spatial_bridge)
+
+  # Content root contract: the app resolves MODS next to its own binary
+  # first (see config::contentRootCandidates). Keep a symlink in the build
+  # directory so the game finds its content regardless of the launching cwd.
+  if(UNIX AND NOT APPLE)
+    add_custom_command(TARGET omnigrid POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E rm -f
+              $<TARGET_FILE_DIR:omnigrid>/MODS
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+              "${CMAKE_CURRENT_SOURCE_DIR}/MODS"
+              $<TARGET_FILE_DIR:omnigrid>/MODS
+      COMMENT "Symlinking MODS content root next to omnigrid binary")
+  endif()
 endif()
 
 enable_testing()

@@ -54,7 +54,7 @@ namespace render
         OgreRenderer( const OgreRenderer & ) = delete;
         OgreRenderer &operator=( const OgreRenderer & ) = delete;
 
-        /** Set before initialize(); appearance is loaded from data/ui.json by Application. */
+        /** Set before initialize(); appearance is loaded from MODS/Default/ui.json by Application. */
         void setCrosshairConfig( const ui::CrosshairConfig &config );
 
         /** Set before initialize(); user/runtime renderer settings from settings.json. */

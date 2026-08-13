@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace config
 {
@@ -40,4 +41,20 @@ namespace config
      */
     ContentRoot resolveContentRoot( const std::filesystem::path &rootDir,
                                     const std::string &configuredMod );
+
+    /**
+     * Content-root candidates for a running application, best first:
+     * the executable's own directory (Linux /proc/self/exe; skipped when
+     * unresolvable) and then the current working directory. The build
+     * installs a MODS symlink next to the binary (see CMakeLists.txt), so
+     * the game finds its content regardless of the launching directory.
+     */
+    std::vector<std::filesystem::path> contentRootCandidates();
+
+    /**
+     * Resolves the active content root by trying contentRootCandidates()
+     * in order. Returns the first non-empty ContentRoot; when no candidate
+     * has any content, an empty ContentRoot (core starts without content).
+     */
+    ContentRoot resolveContentRootFromCandidates( const std::string &configuredMod );
 } // namespace config
