@@ -1,26 +1,45 @@
 # INDEX.plan
 
 PROJECT
-CloneCraft: modular C++20 3D voxel sandbox. SDL3 owns window/input; OgreNext
+OmniGrid: modular C++20 3D voxel sandbox. SDL3 owns window/input; OgreNext
 renders; JSON/Lua own content/worldgen; Jolt physics is planned.
 
-READ FIRST ON EVERY AGENT RUN
+WORKING AGREEMENT
+The binding agent contract is AGENTS_OMNIGRID_PRIMUS_IMPETUS.md (milestone
+rules, definition of done, forbidden paths, hard stop conditions, GitHub
+workflow). This plan is the session-start summary of that contract.
+
+READ FIRST ON EVERY AGENT RUN (Primus-impetus order)
 1. INDEX.plan
-2. docs/STATUS.md
-3. docs/ARCHITECTURE.md
-4. docs/COORDINATES.md
-5. docs/DYNAMIC_SPACE.md
-6. docs/PHASE2_VALIDATION.md
-7. docs/DATA_DRIVEN_AUDIT.md
-8. docs/STATIC_ANALYSIS.md
+2. AGENTS_OMNIGRID_PRIMUS_IMPETUS.md (working agreement)
+3. docs/STATUS.md
+4. docs/ARCHITECTURE.md
+5. docs/DECISIONS.md
+6. docs/MILESTONES.md
+7. relevant domain docs (COORDINATES, DYNAMIC_SPACE, WORLDGEN, ...)
+8. graphify-out/GRAPH_REPORT.md (if present)
 9. git status
 10. git log --oneline -10
+11. git diff / git diff --cached
+12. current GitHub issue + its dependencies (master tracker: #15)
 
 BUILD
 Preferred gate: `./compile.sh`
 Architecture only: `python3 tools/architecture_check.py --root .`
-Headless dependency-light validation: configure with `-DCLONECRAFT_BUILD_APP=OFF`.
+Static analysis only: `./compile.sh --analyze-only` (architecture + clang-tidy AST)
+Headless dependency-light validation: configure with `-DOMNIGRID_BUILD_APP=OFF`.
 Do not install/modify OS packages from an autonomous coding run.
+
+TWO ANALYSIS LEVELS
+- graphify (graphify-out/): code/architecture knowledge graph. Use
+  `graphify query` / `graphify path` / `graphify explain` before larger changes;
+  run `graphify update .` after code changes, and `/graphify . --update`
+  (via OpenCode) after docs/config/schema changes.
+- clang-tidy / C++ AST (`./compile.sh --analyze-only`): the mandatory C++ AST/
+  semantic gate. `tools/architecture_check.py` is the deterministic include/
+  dependency gate and always runs.
+Graphify green does NOT replace clang-tidy green, and vice versa. Neither
+replaces the architecture checker.
 
 PHASE-2 COORDINATE INVARIANTS
 - Persistent world identity is Sector -> Region -> Section -> ChunkGroup -> Chunk -> Block.
@@ -47,12 +66,27 @@ OTHER ARCHITECTURE INVARIANTS
 - AIR runtime id 0 does not mean unloaded chunk.
 - Worldgen remains deterministic and data-driven.
 - No concrete geology/material semantics in generic WorldGen C++.
+- No second world-state/event/persistence/construction path; no direct UI/input
+  -> ChunkManager::setBlock(); no ECS entity per normal voxel (see
+  AGENTS_OMNIGRID_PRIMUS_IMPETUS.md section 0).
 
 MANDATORY END-OF-RUN GATE
 - `python3 tools/architecture_check.py --root .`
 - normal completion: `./compile.sh` when target system dependencies are present
 - never claim the graphical target built if SDL3/OgreNext were unavailable
 - never install missing system dependencies automatically
+- graphify updated after relevant changes (`graphify update .`, `/graphify . --update`)
+- every milestone committed and documented on GitHub (see working agreement)
+
+MILESTONE ROADMAP
+See docs/MILESTONES.md. Main sequence: M00 agent/docs baseline -> M01 rename (#14)
+-> M02 worldgen baseline (#8) -> M03 contracts/prototypes (#3) -> M04 sidecars (#3)
+-> M05 unified world state (#3) -> M06 minimal actions + player interaction (#3/#18)
+-> M07 events + Lua callback cache (#3/#7) -> M08 enTT hot state (#3) -> M09 RocksDB
+persistence (#3) -> M10 embedded client/server (#13) -> M11 construction foundation (#16)
+-> M12 construction blueprints (#17). Parallel lanes (when prerequisites are met):
+#4 render/LOD, #6 UI/RmlUi, #9 audio, #10 celestial, #11 vegetation, #12 fluids,
+#5 villages.
 
 IMPORTANT FILES
 src/world/coordinates/*                 exact hierarchical block world
@@ -64,6 +98,7 @@ src/world/chunk/*                       sparse chunks/groups + streaming
 src/render/*                            Ogre-local rendering
 src/app/Application.*                   subsystem wiring/rebase transaction
 tools/architecture_rules.json           dependency firewall
+AGENTS_OMNIGRID_PRIMUS_IMPETUS.md       binding agent working agreement
 
 docs/COORDINATES.md                     Phase-2 world hierarchy
 docs/DYNAMIC_SPACE.md                    player/NPC/Jolt local float model

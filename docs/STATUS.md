@@ -1,5 +1,25 @@
 # STATUS
 
+## Primus impetus status (2026-08-13)
+
+- M00 — Agent-/Dokumentations-Baseline: **done** (docs-only commit).
+  `INDEX.plan` is on the OmniGrid/agent workflow (read-first order, Graphify
+  rules, AST-vs-Graphify split, end-of-run gate); `docs/MILESTONES.md` is
+  synced with the Primus-impetus roadmap; this file describes the current state.
+- M01 — Rename (#14): **in progress, uncommitted**. A CloneCraft -> OmniGrid
+  branding sweep sits in the working tree (docs, build names, env var names,
+  source comments) but has not been committed. It is foreign working-tree work
+  and is not part of the M00 commit. Persistent technical ids (block ids,
+  mod namespaces, save/protocol identities) remain untouched.
+- M02 — Worldgen baseline (#8): **next**. Broaden desert climate distribution,
+  define `BiomeDef::weight` semantics, add determinism/statistics tests for
+  seed 1337 plus at least one additional seed.
+- Core spine #3 (contracts/sidecars/world state/actions/events/enTT/RocksDB),
+  #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
+  #16/#17 (construction): **not started**.
+- Baseline gates at M00 time: architecture check PASS, clang-tidy/AST PASS,
+  15/15 renderer-independent ctest suites PASS.
+
 ## Current state
 
 Prototype has progressed beyond milestone 05 into voxel rendering/camera work.
