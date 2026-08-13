@@ -1,0 +1,18 @@
+{
+    "fields": [
+        {
+            "id": "savanna_mask",
+            "dimension": "2d",
+            "script": "worldgen/savanna_mask.lua",
+            "function": "sample",
+            "salt": 1000
+        },
+        {
+            "id": "massif_mask",
+            "dimension": "2d",
+            "script": "worldgen/massif_mask.lua",
+            "function": "sample",
+            "salt": 1000
+        }
+    ]
+}

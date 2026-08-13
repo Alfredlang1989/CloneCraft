@@ -6,10 +6,11 @@ function sample(seed)
     local continental=0.5+0.5*noise2(0.00034,111)
     local rugged=0.5+0.5*noise2(0.00047,112)
     local macro=continental*0.58+rugged*0.42
-    local crown=0.5+0.5*noise2(0.00073,116)
-    local massif=smoothstep(0.68,0.82,macro)
-    local hot=smoothstep(0.52,0.76,temp)
-    local dry=1.0-smoothstep(0.30,0.52,rain)
-    local arid=math.sqrt(hot*dry)
-    return clamp(massif*(0.68+crown*0.45)*(1.0-0.82*arid),0,1)
+    local patch=0.5+0.5*noise2(0.00090,651)
+    local warm=smoothstep(0.50,0.72,temp)
+    local wetEnough=smoothstep(0.27,0.40,rain)
+    local notWet=1.0-smoothstep(0.50,0.64,rain)
+    local seasonal=wetEnough*notWet
+    local lowland=1.0-smoothstep(0.60,0.76,macro)
+    return clamp(math.sqrt(warm*seasonal)*lowland*(0.72+patch*0.20),0,1)
 end
