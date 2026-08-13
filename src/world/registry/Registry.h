@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace world
@@ -206,14 +207,21 @@ namespace world
      * sidecar types in sidecars.json; the optimized C++ storage per sidecar
      * may differ from this metadata. The serialization version prepares the
      * persistence layer (M09) without implementing it yet.
+     *
+     * The runtime pilot (M04) is hardwired to the orientation sidecar; the
+     * registry-driven resolver that stores values for *any* declared type
+     * arrives with M05. No per-field unique_ptr members are added to Chunk.
      */
     struct SidecarDef
     {
         std::string id;                    // stable namespaced id, e.g. "core:orientation"
         std::string displayName;
         SidecarValueType valueType = SidecarValueType::Uint8;
-        std::uint32_t defaultValue = 0;    // encoded default (e.g. 0 = Up for orientation)
-        std::uint32_t bitWidth = 0;        // optional compact encoding hint (0 = type default)
+        // Typed default: integer default for uint8/16/32, float default for
+        // the Float value type. Validated per valueType when parsing.
+        std::variant<std::uint32_t, float> defaultValue = 0u;
+        std::uint32_t bitWidth = 0;        // compact-encoding hint (0 = full type width);
+                                           // metadata for storage/serialization (M09) only
         SidecarStorageStrategy storage = SidecarStorageStrategy::Sparse;
         bool persist = true;               // persistence policy
         std::uint32_t serializationVersion = 1;
@@ -264,7 +272,38 @@ namespace world
     using BlockRegistry = Registry<BlockDef>;
     using BiomeRegistry = Registry<BiomeDef>;
     using ResourceRegistry = Registry<ResourceDef>;
-    using PrototypeRegistry = Registry<PrototypeDef>;
+
+    /**
+     * Prototype registry with a persistent block-claim index (blockId ->
+     * prototype). The 1:1 contract - each physical block is claimed by at
+     * most one prototype, so `prototypeForBlock` never depends on registry
+     * order - is enforced across ALL load calls, not only within a single
+     * parse invocation. Re-loading the same file into a registry that
+     * already contains the claims is still rejected as a duplicate.
+     */
+    class PrototypeRegistry : public Registry<PrototypeDef>
+    {
+    public:
+        void insert( const PrototypeDef &entry )
+        {
+            if( const std::string *owner = claimedBy( entry.blockId ) )
+                throw RegistryError( "blockId '" + entry.blockId +
+                                     "' is already claimed by prototype '" + *owner + "'" );
+            Registry<PrototypeDef>::insert( entry );
+            mBlockClaims.emplace( entry.blockId, entry.id );
+        }
+
+        /** Prototype id claiming the block, or nullptr when unclaimed. */
+        const std::string *claimedBy( const std::string &blockId ) const
+        {
+            const auto it = mBlockClaims.find( blockId );
+            return it == mBlockClaims.end() ? nullptr : &it->second;
+        }
+
+    private:
+        std::unordered_map<std::string, std::string> mBlockClaims;
+    };
+
     using SidecarRegistry = Registry<SidecarDef>;
 
 } // namespace world

@@ -199,6 +199,29 @@ TEST_CASE( prototypes_block_claim_is_unique )
         { "id": "default:cactus_alt", "displayName": "Other", "blockId": "core:cactus" } ]})", blocks ); } ) );
 }
 
+TEST_CASE( prototypes_block_claim_is_unique_across_parse_calls )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+    PrototypeRegistry out;
+
+    RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus" } ]})" ),
+                                     "test-prototypes-1.json", blocks, out );
+    CHECK_EQ( out.size(), std::size_t{ 1 } );
+
+    // A second, independent load call into the same registry must not be able
+    // to claim core:cactus again (registry-order-dependent identity).
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus_alt", "displayName": "Other", "blockId": "core:cactus" } ]})" ),
+                                         "test-prototypes-2.json", blocks, out );
+    } ) );
+    CHECK_EQ( out.size(), std::size_t{ 1 } );
+    CHECK( out.claimedBy( "core:cactus" ) != nullptr );
+    CHECK( *out.claimedBy( "core:cactus" ) == "default:cactus" );
+    CHECK( out.claimedBy( "core:stone" ) == nullptr );
+}
+
 TEST_CASE( prototypes_reject_hash_collisions )
 {
     const BlockRegistry blocks = loadRealBlocks();

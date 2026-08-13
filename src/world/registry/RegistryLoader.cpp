@@ -721,7 +721,6 @@ namespace world
         const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
 
         int index = 0;
-        std::unordered_map<std::string, std::string> claimedBy;
         for( const json &entry : root["prototypes"] )
         {
             ++index;
@@ -752,13 +751,14 @@ namespace world
                 throw RegistryError( context( source, index ) + ": prototype '" + def.id +
                                      "' references unknown blockId '" + def.blockId + "'" );
 
-            if( claimedBy.contains( def.blockId ) )
+            // Claim check runs against the registry's persistent index, so a
+            // second parse call into the same registry cannot smuggle in a
+            // second prototype for an already claimed block either.
+            if( const std::string *owner = out.claimedBy( def.blockId ) )
                 throw RegistryError( context( source, index ) + ": prototype '" + def.id +
                                      "' claims blockId '" + def.blockId +
-                                     "' which is already claimed by prototype '" +
-                                     claimedBy.at( def.blockId ) + "'" );
+                                     "' which is already claimed by prototype '" + *owner + "'" );
 
-            claimedBy.emplace( def.blockId, def.id );
             out.insert( def );
         }
     }
@@ -820,14 +820,6 @@ namespace world
                                          ": 'valueType' must be 'uint8', 'uint16', 'uint32' or 'float'" );
             }
 
-            if( entry.contains( "defaultValue" ) )
-            {
-                if( !entry["defaultValue"].is_number_unsigned() )
-                    throw RegistryError( context( source, index ) +
-                                         ": 'defaultValue' must be an unsigned integer" );
-                def.defaultValue = entry["defaultValue"].get<std::uint32_t>();
-            }
-
             if( entry.contains( "bitWidth" ) )
             {
                 if( !entry["bitWidth"].is_number_unsigned() )
@@ -835,6 +827,50 @@ namespace world
                 def.bitWidth = entry["bitWidth"].get<std::uint32_t>();
                 if( def.bitWidth == 0u || def.bitWidth > 32u )
                     throw RegistryError( context( source, index ) + ": 'bitWidth' must be in 1..32" );
+                if( def.valueType == SidecarValueType::Float )
+                    throw RegistryError( context( source, index ) +
+                                         ": 'bitWidth' only applies to integer value types" );
+            }
+
+            if( entry.contains( "defaultValue" ) )
+            {
+                const std::string where = context( source, index );
+                if( def.valueType == SidecarValueType::Float )
+                {
+                    if( !entry["defaultValue"].is_number() )
+                        throw RegistryError( where + ": 'defaultValue' must be a number for 'float'" );
+                    def.defaultValue = entry["defaultValue"].get<float>();
+                }
+                else
+                {
+                    if( !entry["defaultValue"].is_number_unsigned() )
+                        throw RegistryError( where +
+                                             ": 'defaultValue' must be an unsigned integer" );
+                    const std::uint32_t value = entry["defaultValue"].get<std::uint32_t>();
+
+                    const std::uint32_t typeMax = def.valueType == SidecarValueType::Uint8   ? 255u
+                                                  : def.valueType == SidecarValueType::Uint16 ? 65535u
+                                                                                              : 0xFFFFFFFFu;
+                    if( value > typeMax )
+                        throw RegistryError( where + ": 'defaultValue' " + std::to_string( value ) +
+                                             " does not fit valueType '" +
+                                             ( def.valueType == SidecarValueType::Uint8   ? "uint8"
+                                               : def.valueType == SidecarValueType::Uint16 ? "uint16"
+                                                                                           : "uint32" ) +
+                                             "'" );
+
+                    if( def.bitWidth != 0u && def.bitWidth < 32u )
+                    {
+                        const std::uint32_t bitMax = ( 1u << def.bitWidth ) - 1u;
+                        if( value > bitMax )
+                            throw RegistryError( where + ": 'defaultValue' " +
+                                                 std::to_string( value ) +
+                                                 " does not fit in 'bitWidth' " +
+                                                 std::to_string( def.bitWidth ) + " (max " +
+                                                 std::to_string( bitMax ) + ")" );
+                    }
+                    def.defaultValue = value;
+                }
             }
 
             if( entry.contains( "storage" ) )

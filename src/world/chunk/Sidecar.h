@@ -23,7 +23,17 @@ namespace world
     class Sidecar
     {
     public:
-        explicit Sidecar( T defaultValue ) : mDefaultValue( defaultValue ) {}
+        /**
+         * @param defaultValue value that removes the entry again
+         * @param capacity    number of valid local indices; 0 = unbounded.
+         *                    Chunk passes its VOLUME so out-of-range indices
+         *                    (a future deserialization trap, M09) are
+         *                    rejected instead of silently stored.
+         */
+        explicit Sidecar( T defaultValue, std::uint32_t capacity = 0u ) :
+            mDefaultValue( defaultValue ), mCapacity( capacity )
+        {
+        }
 
         Sidecar( const Sidecar & ) = delete;
         Sidecar &operator=( const Sidecar & ) = delete;
@@ -32,15 +42,23 @@ namespace world
          * Stores value for localIndex. Writing the default value removes the
          * entry (lazy destruction): the caller may then drop the sidecar
          * entirely when it reports empty().
+         *
+         * @return true when the stored state actually changed; false when the
+         *         value already was in that state, the write was the default
+         *         while no entry existed, or localIndex is outside the
+         *         configured capacity.
          */
-        void set( std::uint32_t localIndex, T value )
+        bool set( std::uint32_t localIndex, T value )
         {
+            if( mCapacity != 0u && localIndex >= mCapacity )
+                return false;
             if( value == mDefaultValue )
-            {
-                mEntries.erase( localIndex );
-                return;
-            }
+                return mEntries.erase( localIndex ) != 0u;
+            const auto it = mEntries.find( localIndex );
+            if( it != mEntries.end() && it->second == value )
+                return false;
             mEntries.insert_or_assign( localIndex, value );
+            return true;
         }
 
         /** Absent entry == default value. */
@@ -55,6 +73,7 @@ namespace world
         std::size_t entryCount() const { return mEntries.size(); }
         bool empty() const { return mEntries.empty(); }
         T defaultValue() const { return mDefaultValue; }
+        std::uint32_t capacity() const { return mCapacity; }
 
         void clear() { mEntries.clear(); }
 
@@ -63,6 +82,7 @@ namespace world
 
     private:
         T mDefaultValue;
+        std::uint32_t mCapacity = 0u;
         std::map<std::uint32_t, T> mEntries;
     };
 } // namespace world

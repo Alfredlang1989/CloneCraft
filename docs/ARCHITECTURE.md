@@ -86,6 +86,15 @@ becomes *hot* only when it needs frequent simulation - enTT projection comes
 in M08 and is explicitly not the world, just the active runtime cache. The
 unified world-state API (M05) will hide which layer a property lives in.
 
+Sidecar state is strictly subordinated to the voxel it belongs to: state is
+only written for positions whose block actually needs it (orientation writes
+to AIR are rejected), and replacing a block — including by AIR — clears its
+stale sidecar entries. No zombie sidecar state survives a block change, so a
+warm block can always fall back to cold without leaking state. The registry is
+data-driven, but no per-field sidecar members are hardcoded into Chunk: M05
+replaces the hardwired pilot with the registry-driven resolver that stores
+values for any declared sidecar type.
+
 ## Main loop
 
     while (running) {

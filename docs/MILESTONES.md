@@ -72,19 +72,36 @@ Kept as history; the roadmap below replaces them as the current plan.
   Temperature/Damage only after the proven orientation pilot.
   Status: done. `world::Sidecar<T>` sparse per-chunk store (lazy allocation,
   default-write removes entries, deterministic ascending iteration for M09);
-  `BlockOrientation` (3-bit encoding) as first pilot via `OrientationSidecar`;
-  Chunk owns the sidecar lazily (no sidecar until first non-default write,
-  dropped again when the last entry returns to default); ChunkManager
-  orientation passthrough by BlockAddress without chunk creation; data-driven
-  `sidecars.json` (`SidecarDef`: valueType/defaultValue/bitWidth/storage/
-  persist/serializationVersion) with `core:orientation`; suites: `sidecars`
-  11 cases; gates PASS (19/19 ctest suites).
+  `BlockOrientation` as first pilot via `OrientationSidecar` (`bitWidth: 3`
+  is a serialization hint — the pilot stores sparse map entries); Chunk owns
+  the sidecar lazily (no sidecar until first non-default write, dropped again
+  when the last entry returns to default); orientation state is strictly
+  subordinated to the voxel: writes to AIR are rejected and block replacement
+  (incl. by AIR) or `assignBlocks` clears stale entries — no zombie sidecar
+  state; ChunkManager orientation passthrough by BlockAddress without chunk
+  creation; `setBlockOrientation` reports whether state changed (no-op writes
+  never dirty/notify, `setBlock` and `clearChunkOrientations` notify only on
+  real changes); data-driven `sidecars.json` (`SidecarDef`:
+  valueType/defaultValue/bitWidth/storage/persist/serializationVersion) with
+  typed `defaultValue` (`std::variant<uint32_t, float>`: integer defaults must
+  fit type width and bitWidth, float defaults may be fractional) and
+  `core:orientation`; persistent block-claim index on `PrototypeRegistry`
+  (a second load call cannot claim an already claimed block);
+  `prototypeForBlock` identity no longer depends on registry order; separate
+  load-failure logging for prototype vs sidecar registry; suites: `sidecars`
+  19 cases, `prototypes` 13 cases; gates PASS (19/19 ctest suites). Review
+  findings (zombie sidecars, no-op dirty, schema contradiction, cross-call
+  claims) verified and fixed.
 
 - **M05 — #3 Unified World State ◻**
   `get` / `has` / `set`; prototype defaults; sidecar resolver; central block
   mutation; dirty hooks; mesh/neighbour invalidation; persistence-dirty
   abstraction without RocksDB. Lua/game code must not know whether a value
   comes from prototype, sidecar or later ECS.
+  Constraint from the M04 review: no per-field sidecar members in Chunk
+  (`mTemperature`/`mDamage`/`mPower` as more `unique_ptr`s is forbidden) —
+  M05 brings the registry-driven resolver that stores values for any declared
+  sidecar type.
 
 - **M06 — #3 Minimal Actions + #18 Player Interaction ◻**
   Minimal actions `place_block` / `remove_block` with target/payload/result/

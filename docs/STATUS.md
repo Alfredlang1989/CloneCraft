@@ -29,13 +29,19 @@
   (`core:cactus` block); `settings.json` gains the `mod` key; content moved
   `data/` -> `MODS/Default/`; ownership contract documented in
   `docs/ARCHITECTURE.md`. Suites: 18/18 PASS.
-- M04 — Sidecar pilot (#3): **done**. Generic `world::Sidecar<T>` framework
-  (lazy allocation, lazy destruction on default-write, deterministic
-  iteration), `BlockOrientation` pilot with lazy per-chunk `OrientationSidecar`
-  in Chunk/ChunkManager, data-driven `sidecars.json` registry
-  (`SidecarDef` with value schema, storage strategy, persistence policy and
-  serialization version), `core:orientation` (3-bit) in MODS/Default. Suites:
-  19/19 PASS.
+- M04 — Sidecar pilot (#3): **done** (committed `fd1d8b3`, review fixes in a
+  follow-up commit). Generic `world::Sidecar<T>` framework (lazy allocation,
+  lazy destruction on default-write, deterministic iteration, `set()` reports
+  change so no-ops never dirty, capacity check rejects out-of-range writes),
+  `BlockOrientation` pilot with lazy per-chunk `OrientationSidecar` in
+  Chunk/ChunkManager, orientation state subordinated to the voxel (writes to
+  AIR rejected, block replacement/`assignBlocks` clears stale entries — no
+  zombie sidecars), change notifications only on real changes, data-driven
+  `sidecars.json` registry (`SidecarDef` with typed `defaultValue`
+  variant/bitWidth validated against the value type, storage strategy,
+  persistence policy and serialization version), `core:orientation` (bitWidth
+  3) in MODS/Default, persistent prototype block-claims across load calls.
+  Suites: `sidecars` 19 cases, `prototypes` 13 cases, 19/19 PASS.
 - Core spine #3 (world state/actions/events/enTT/RocksDB),
   #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
   #16/#17 (construction): **not started**.
@@ -43,7 +49,8 @@
   15/15 renderer-independent ctest suites PASS. At M02 time the same gates PASS
   with 16/16 suites (new `biome_distribution` suite). At M03 time 18/18 suites
   (new `content_root` + `prototypes` suites). At M04 time 19/19 suites (new
-  `sidecars` suite).
+  `sidecars` suite; after the review-fix pass `sidecars` has 19 cases and
+  `prototypes` 13 cases).
 
 ## Current state
 

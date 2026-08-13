@@ -28,7 +28,9 @@ namespace world
 
         // Sparse chunk sidecars (issue #3, section 5). Sidecar state never
         // creates or unloads chunks; absent chunks simply have no sidecar.
-        void setBlockOrientation( const BlockAddress &, BlockOrientation );
+        // The orientation setters return false when nothing changed (no
+        // notification is emitted for no-ops).
+        bool setBlockOrientation( const BlockAddress &, BlockOrientation );
         std::optional<BlockOrientation> blockOrientation( const BlockAddress & ) const;
         const OrientationSidecar *chunkOrientationSidecar( const ChunkAddress & ) const;
         void clearChunkOrientations( const ChunkAddress & );

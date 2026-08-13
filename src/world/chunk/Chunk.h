@@ -36,11 +36,19 @@ namespace world
 
         void setBlock( std::int64_t lx, std::int64_t ly, std::int64_t lz, std::uint16_t id )
         {
-            std::uint16_t &slot = mBlocks[blockIndex( { lx, ly, lz } )];
+            const std::uint32_t localIndex = blockIndex( { lx, ly, lz } );
+            std::uint16_t &slot = mBlocks[localIndex];
             if( slot == id ) return;
             if( slot == 0 && id != 0 ) ++mNonAirCount;
             else if( slot != 0 && id == 0 ) --mNonAirCount;
             slot = id;
+            // Sidecar state describes the *current* block at this position.
+            // Replacing the block (including by AIR) invalidates it, so the
+            // entry is dropped here. Without this a removed block would leave
+            // a zombie orientation behind (issue #3 section 5 invariant).
+            if( mOrientation && mOrientation->set( localIndex, BlockOrientation::Up ) &&
+                mOrientation->empty() )
+                mOrientation.reset();
         }
 
         void assignBlocks( std::span<const std::uint16_t> blocks )
@@ -50,6 +58,7 @@ namespace world
             std::copy( blocks.begin(), blocks.end(), mBlocks.begin() );
             mNonAirCount = static_cast<std::uint32_t>(
                 std::count_if( mBlocks.begin(), mBlocks.end(), []( std::uint16_t id ) { return id != 0; } ) );
+            clearOrientations(); // wholesale content replacement invalidates sidecars
         }
 
         void assignBlocks( std::span<const std::uint16_t> blocks, std::uint32_t nonAirCount )
@@ -58,6 +67,7 @@ namespace world
                 throw std::invalid_argument( "Chunk::assignBlocks: invalid block data/count" );
             std::copy( blocks.begin(), blocks.end(), mBlocks.begin() );
             mNonAirCount = nonAirCount;
+            clearOrientations(); // wholesale content replacement invalidates sidecars
         }
 
         bool empty() const { return mNonAirCount == 0; }
@@ -67,20 +77,28 @@ namespace world
         // -- Sparse chunk sidecars (issue #3, section 5) ----------------------
 
         /** Sets the block orientation. Writing the default (Up) removes the
-         *  entry; when the last entry disappears the sidecar is dropped. */
-        void setBlockOrientation( std::int64_t lx, std::int64_t ly, std::int64_t lz,
+         *  entry; when the last entry disappears the sidecar is dropped.
+         *  @return true when the stored state actually changed.
+         *  @note Invariant (issue #3 section 5): a sidecar exists only while
+         *        at least one block actually needs its state. AIR blocks can
+         *        never carry orientation, so writes to AIR positions are
+         *        rejected here (returns false, nothing stored). */
+        bool setBlockOrientation( std::int64_t lx, std::int64_t ly, std::int64_t lz,
                                   BlockOrientation orientation )
         {
             const std::uint32_t localIndex = blockIndex( { lx, ly, lz } );
+            if( mBlocks[localIndex] == 0u )
+                return false; // AIR: a sidecar entry would be zombie state
             if( !mOrientation )
             {
                 if( orientation == BlockOrientation::Up )
-                    return; // default orientation: no sidecar needed at all
-                mOrientation = std::make_unique<OrientationSidecar>();
+                    return false; // default on default: no state change
+                mOrientation = std::make_unique<OrientationSidecar>( VOLUME );
             }
-            mOrientation->set( localIndex, orientation );
+            const bool changed = mOrientation->set( localIndex, orientation );
             if( mOrientation->empty() )
                 mOrientation.reset();
+            return changed;
         }
 
         /** Absent entry means the block has the default orientation (Up). */

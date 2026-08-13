@@ -136,36 +136,58 @@ part of the repair checks.
 
 Sparse/optional per-chunk sidecars (issue #3, section 5): a sidecar exists only
 while at least one block in the chunk needs that data, and disappears again
-when the last entry returns to its default. Mods declare sidecar *types* in
-`sidecars.json`; the optimized C++ storage may vary per sidecar (section 5.1).
-The file is optional — a content root without sidecar types is legal.
+when the last entry returns to its default. Mods declare sidecar *type
+definitions/metadata* in `sidecars.json`; the optimized C++ storage may vary
+per sidecar (section 5.1). The file is optional — a content root without
+sidecar types is legal.
 
 | Field | Type | Required | Default | Meaning |
-|---|---:|---:|---|---|
+|---|---|---:|---:|---|---|
 | `id` | string | yes | - | namespaced sidecar id (`<namespace>:<name>`) |
 | `displayName` | string | yes | - | user-facing name |
 | `valueType` | string | no | `uint8` | `uint8` / `uint16` / `uint32` / `float` |
-| `defaultValue` | unsigned | no | 0 | encoded default value |
-| `bitWidth` | unsigned | no | 0 | compact encoding hint (1..32; 0 = type default) |
+| `defaultValue` | unsigned or number | no | 0 | typed default: unsigned for integer types, number for `float` |
+| `bitWidth` | unsigned | no | 0 | compact-encoding hint for integer types (1..32; 0 = full type width); metadata for storage/serialization (M09) only |
 | `storage` | string | no | `sparse` | `sparse` / `dense` |
 | `persist` | boolean | no | true | persistence policy |
 | `serializationVersion` | unsigned | no | 1 | sidecar payload version (>= 1) |
 
 Validation: duplicate ids, non-namespaced ids, unknown valueType/storage
 strings, out-of-range bitWidth/serializationVersion and unknown fields are
-rejected with source/entry context.
+rejected with source/entry context. `defaultValue` is validated against the
+declared `valueType`: integer defaults must be unsigned and fit both the type
+width and `bitWidth` (e.g. `uint8` + `bitWidth: 3` rejects `255`, max is 7);
+`float` defaults must be a JSON number and may be fractional. `bitWidth` is
+rejected for `float` value types.
 
 ### Runtime sidecar framework
 
 `world::Sidecar<T>` (src/world/chunk/Sidecar.h) is the generic sparse
 per-chunk store: empty until the first `set()`, entries removed when written
 back to the default, deterministic ascending local-index iteration for later
-serialization (M09). `BlockOrientation` (Up/Down/North/South/East/West, 3-bit
-encoding) is the first pilot type via `OrientationSidecar`. Chunk owns the
-sidecar lazily: no orientation sidecar exists until the first non-default
-orientation is set, and the sidecar is dropped again once the last entry
-returns to default. `ChunkManager` passes orientation through by
-`BlockAddress` and never creates chunks for sidecar state.
+serialization (M09). `set()` reports whether the stored state actually
+changed, so callers can skip dirty/change notifications for no-ops; writes
+outside the configured capacity (`Chunk::VOLUME` on the chunk path) are
+rejected, closing the future deserialization trap (M09). `BlockOrientation`
+(Up/Down/North/South/East/West; `bitWidth: 3` is a serialization/storage hint,
+the pilot's physical storage is a sparse map entry) is the first pilot type
+via `OrientationSidecar`. Chunk owns the sidecar lazily: no orientation
+sidecar exists until the first non-default orientation is set, and the sidecar
+is dropped again once the last entry returns to default. `ChunkManager` passes
+orientation through by `BlockAddress` and never creates chunks for sidecar
+state.
+
+Lifecycle invariant (issue #3, section 5): sidecar state may exist only for
+positions whose block actually needs it. In the pilot, orientation writes to
+AIR blocks are rejected, and replacing a block (including by AIR) or
+`assignBlocks` wholesale content replacement clears the stale entries — no
+zombie orientation survives a block change.
+
+Note on scope: the registry is data-driven, but the M04 *runtime* pilot is
+hardwired to `core:orientation` (`OrientationSidecar` in Chunk). Registering
+an arbitrary mod sidecar (`foo:radioactivity`) currently yields metadata
+only; the registry-driven resolver that stores values for any declared type
+arrives with M05. No per-field `unique_ptr` members are added to Chunk.
 
 ## prototypes.json
 

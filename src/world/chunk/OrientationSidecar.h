@@ -25,6 +25,10 @@ namespace world
     class OrientationSidecar : public Sidecar<BlockOrientation>
     {
     public:
-        OrientationSidecar() : Sidecar<BlockOrientation>( BlockOrientation::Up ) {}
+        /** @param capacity number of valid local indices (Chunk::VOLUME). */
+        explicit OrientationSidecar( std::uint32_t capacity = 0u ) :
+            Sidecar<BlockOrientation>( BlockOrientation::Up, capacity )
+        {
+        }
     };
 } // namespace world
