@@ -30,32 +30,39 @@ Kept as history; the roadmap below replaces them as the current plan.
   No persistent technical ids renamed cosmetically.
   Gate: behaviour/gameplay unchanged. Docs-only milestone.
 
-- **M01 — Rename (#14) ◐**
+- **M01 — Rename (#14) ✔**
   Safe branding/project surfaces only: README, window/application title,
   startup banner, developer docs, build/product names in small controlled
   steps. Persistent block/prototype ids, mod namespaces, save-schema ids,
   worldgen compatibility ids, future RocksDB keyspaces and protocol identities
   are compatibility contracts and are NOT renamed for branding.
-  Status: a CloneCraft -> OmniGrid branding sweep exists uncommitted in the
-  working tree; it needs to be finished, validated and committed as its own
-  milestone commit.
+  Status: done. Branding sweep committed (`ce72acc`), vendored README renamed
+  (`17bbcf9`); data contracts untouched.
 
-- **M02 — Worldgen baseline (#8) ◑**
+- **M02 — Worldgen baseline (#8) ✔**
   Broaden desert climate distribution (shaped hot*dry response, no pure
   threshold lowering); define and prove `BiomeDef::weight` semantics; add
   determinism/statistics tests for seed 1337 and at least one additional seed;
   hierarchy/boundary tests; update worldgen docs. Then freeze the worldgen
   baseline again.
-  Status: implementation done, commit pending. Desert/badlands selection
-  reshaped in `data/biomes.json`; `tests/TestBiomeDistribution.cpp` (6 cases)
-  locks distribution, determinism, hierarchy invariance, normalization and the
-  weight multiplier; `docs/WORLDGEN.md` gains the competition section; all
-  gates PASS (16/16 ctest suites).
+  Status: done. Desert/badlands selection reshaped in `MODS/Default/biomes.json`;
+  `tests/TestBiomeDistribution.cpp` (6 cases) locks distribution, determinism,
+  hierarchy invariance, normalization and the weight multiplier;
+  `docs/WORLDGEN.md` gains the competition section; all gates PASS (16/16).
 
-- **M03 — #3 Contracts + Prototype Foundation ◻**
+- **M03 — #3 Contracts + Prototype Foundation ◐**
   Ownership/dependency contracts; stable namespaced ids; generic
   world/block/object ref; content-root contract; `MODS/Default`; prototype
   registry; exactly one real pilot block. No full ECS/persistence/event world yet.
+  Status: implementation done, commit pending. Content root contract
+  (`config::ContentRoot`, settings `mod` key, empty-root core start,
+  path-traversal-safe names); content moved `data/` -> `MODS/Default/`;
+  `prototypes.json` registry (`RegistryLoader::parsePrototypes`, cross-ref
+  validation) with stable FNV-1a handles (`PrototypeIdTable`, collision
+  rejection) and `WorldObjectRef` + `prototypeForBlock` bridge; pilot
+  `default:cactus` (new `core:cactus` cross block); ownership contract in
+  `docs/ARCHITECTURE.md` "Content root"; new suites `content_root` (6 cases)
+  and `prototypes` (10 cases); gates PASS (18/18 ctest suites).
 
 - **M04 — #3 Sidecar Pilot ◻**
   Generic sidecar framework; lazy allocation; lazy destruction; orientation as

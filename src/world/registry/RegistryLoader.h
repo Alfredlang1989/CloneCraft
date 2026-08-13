@@ -45,6 +45,20 @@ namespace world
         static void parseBlockFile( const std::string &text, const std::string &source,
                                     BlockRegistry &out );
 
+        /**
+         * Loads <dir>/prototypes.json into `out` when the file exists.
+         * Returns false when the file is absent (a content root without
+         * prototypes is legal); throws RegistryError on any parse or
+         * validation problem.
+         */
+        static bool loadPrototypes( const std::filesystem::path &dir,
+                                    const BlockRegistry &blocks,
+                                    PrototypeRegistry &out );
+
+        /** Parses one already-read JSON document (used by tests). */
+        static void parsePrototypes( const nlohmann::json &root, const std::string &source,
+                                     const BlockRegistry &blocks, PrototypeRegistry &out );
+
     private:
         static std::string requireString( const nlohmann::json &object,
                                           const std::string &source, int index,

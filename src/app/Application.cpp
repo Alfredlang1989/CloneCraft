@@ -30,7 +30,15 @@ namespace app
             mSettingsPath = config::defaultSettingsPath();
             mSettings = config::loadOrCreateSettings( mSettingsPath );
             core::logInfo( "Settings: " + mSettingsPath.string() );
-            mUiConfig = ui::loadUiConfig( "data/ui.json" );
+            mContentRoot = config::resolveContentRoot( ".", mSettings.mod );
+            if( mContentRoot.path.empty() )
+                core::logWarn( "No content root found (MODS/" + mSettings.mod +
+                               " and MODS/Default missing); starting without content" );
+            else
+                core::logInfo( "Content root: " + mContentRoot.path.string() +
+                               " (mod '" + mContentRoot.mod + "')" );
+            if( !mContentRoot.path.empty() )
+                mUiConfig = ui::loadUiConfig( mContentRoot.path / "ui.json" );
         }
         catch( const std::exception &error )
         {
@@ -60,6 +68,7 @@ namespace app
 
         mRenderer = std::make_unique<render::OgreRenderer>();
         mRenderer->setCrosshairConfig( mUiConfig.crosshair );
+        mRenderer->setDataDirectory( mContentRoot.path );
         mRenderer->setOgreConfig( mSettings.ogre );
         mRenderer->setDebugHudConfig( mSettings.debugHud );
         platform::NativeWindowInfo nativeInfo;
@@ -68,7 +77,7 @@ namespace app
         if( !initializeWorld() ) return false;
 
         mWorldRenderer = std::make_unique<render::ChunkWorldRenderer>(
-            mRenderer->root(), mRenderer->sceneManager(), mBlocks, mIdTable, "data" );
+            mRenderer->root(), mRenderer->sceneManager(), mBlocks, mIdTable, mContentRoot.path.string() );
         if( !mWorldRenderer->initialize() ) { core::logError( "World renderer initialization failed" ); return false; }
         mSelectionRenderer = std::make_unique<render::BlockSelectionRenderer>(
             mRenderer->root(), mRenderer->sceneManager(), mUiConfig.blockSelection );
@@ -84,13 +93,28 @@ namespace app
 
     bool Application::initializeWorld()
     {
-        try { world::RegistryLoader::loadFromDirectory( "data", mBlocks, mBiomes, mResources ); }
-        catch( const world::RegistryError &error ) { core::logError( std::string( "Registry load failed: " ) + error.what() ); return false; }
-        mIdTable = world::BlockIdTable( mBlocks );
-        try {
-            mGenConfig = worldgen::loadWorldGenConfig( "data/worldgen.json" );
-            mWorldGen = std::make_unique<worldgen::WorldGen>( mGenConfig, mBlocks, mIdTable, mBiomes );
-        } catch( const std::exception &error ) { core::logError( std::string( "Worldgen initialization failed: " ) + error.what() ); return false; }
+        if( !mContentRoot.path.empty() )
+        {
+            try { world::RegistryLoader::loadFromDirectory( mContentRoot.path, mBlocks, mBiomes, mResources ); }
+            catch( const world::RegistryError &error ) { core::logError( std::string( "Registry load failed: " ) + error.what() ); return false; }
+            mIdTable = world::BlockIdTable( mBlocks );
+            try {
+                world::RegistryLoader::loadPrototypes( mContentRoot.path, mBlocks, mPrototypes );
+                mPrototypeIds = std::make_unique<world::PrototypeIdTable>( mPrototypes );
+            } catch( const world::RegistryError &error ) { core::logError( std::string( "Prototype registry load failed: " ) + error.what() ); return false; }
+            core::logInfo( "Registered " + std::to_string( mPrototypes.size() ) + " prototype(s)" );
+            try {
+                mGenConfig = worldgen::loadWorldGenConfig( mContentRoot.path / "worldgen.json" );
+                mWorldGen = std::make_unique<worldgen::WorldGen>( mGenConfig, mBlocks, mIdTable, mBiomes );
+            } catch( const std::exception &error ) { core::logError( std::string( "Worldgen initialization failed: " ) + error.what() ); return false; }
+        }
+        else
+        {
+            // Core must still start without any content: empty registries,
+            // no worldgen, no streaming. Gameplay hooks simply do nothing.
+            core::logWarn( "Skipping world initialization: no content available" );
+            return true;
+        }
 
         mStreaming = std::make_unique<world::ChunkStreamingManager>(
             *mWorldGen, mChunks, mSettings.world.chunkRenderDistance, mSettings.world.chunkCommitsPerUpdate );

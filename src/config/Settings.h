@@ -62,6 +62,8 @@ namespace config
     struct Settings
     {
         std::uint32_t schemaVersion = 1u;
+        /** Active content mod id; the content root is <root>/MODS/<mod> (see ContentRoot.h). */
+        std::string mod = "Default";
         WindowSettings window;
         WorldSettings world;
         CameraSettings camera;

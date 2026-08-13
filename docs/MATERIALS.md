@@ -1,6 +1,6 @@
 # BLOCK MATERIALS
 
-Block appearance is defined in `data/blocks.json`. Terrain rendering uses OgreNext HLMS PBS.
+Block appearance is defined in `MODS/Default/blocks.json`. Terrain rendering uses OgreNext HLMS PBS.
 The C++ renderer translates registry values; it must not contain per-block colour/material tables.
 
 ## Visual source priority
@@ -115,4 +115,4 @@ The default terrain blocks now exercise the same static file-texture path as veg
 sandstone, snow, red sand and red sandstone. The existing JSON `color` remains as a fallback,
 but texture has higher visual priority. No block-specific C++ material logic is used.
 
-All test textures are static 32x32 RGBA PNG files under `data/textures/`.
+All test textures are static 32x32 RGBA PNG files under `MODS/Default/textures/`.

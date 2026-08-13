@@ -158,6 +158,30 @@ namespace world
     };
 
     /**
+     * Registered gameplay object/block prototype (e.g. "default:cactus").
+     *
+     * Prototypes are the *logical* identity layer on top of physical block
+     * ids: a voxel stores a compact block index, while gameplay refers to a
+     * stable namespaced prototype id. Several prototypes may share one
+     * block, and a prototype may later own sidecar data (M04+) and
+     * event/action hooks (M07).
+     *
+     * Ids are always namespaced (<namespace>:<name>, both non-empty) and
+     * never depend on load order. The runtime handle (PrototypeIdTable) is
+     * a stable hash of the id.
+     */
+    struct PrototypeDef
+    {
+        std::string id;         // e.g. "default:cactus"
+        std::string displayName;
+        std::string blockId;    // linked physical block (must exist in the BlockRegistry)
+        // Declared capabilities/slots, e.g. "contact.damage". Pure
+        // declarations for now; the behaviour layer arrives with the
+        // signal/slot system (M07).
+        std::vector<std::string> capabilities;
+    };
+
+    /**
      * Generic id-keyed registry with insertion order and strict
      * duplicates. Lookup is O(1); iteration is deterministic.
      */
@@ -202,5 +226,6 @@ namespace world
     using BlockRegistry = Registry<BlockDef>;
     using BiomeRegistry = Registry<BiomeDef>;
     using ResourceRegistry = Registry<ResourceDef>;
+    using PrototypeRegistry = Registry<PrototypeDef>;
 
 } // namespace world

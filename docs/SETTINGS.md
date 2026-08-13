@@ -8,8 +8,9 @@ If the file does not exist, Omnigrid creates the directory and writes a complete
 
 ## Schema version 1
 
-The initial file contains five groups:
+The initial file contains:
 
+- `mod`: id of the active content mod. The content root is resolved by `config::ContentRoot` as `<install>/MODS/<mod>`, falling back to `MODS/Default` when the configured mod is missing. Unknown/invalid mod names never break startup; they silently fall back to `Default` (see `docs/ARCHITECTURE.md` "Content root").
 - `window`: startup resolution, fullscreen and resizable-window state.
 - `world`: 3D chunk streaming/render radius and the main-thread commit budget per update.
 - `camera`: movement speed and mouse-look sensitivity.

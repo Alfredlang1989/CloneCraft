@@ -11,7 +11,7 @@
 using namespace world;
 
 #ifndef OMNIGRID_DATA_DIR
-#define OMNIGRID_DATA_DIR "data"
+#define OMNIGRID_DATA_DIR "MODS/Default"
 #endif
 
 namespace

@@ -685,4 +685,78 @@ namespace world
                                      "' is not allowed here" );
         }
     }
+
+    namespace
+    {
+        bool isNamespacedId( const std::string &id )
+        {
+            const std::size_t separator = id.find( ':' );
+            if( separator == std::string::npos )
+                return false;
+            if( separator == 0u || separator + 1u >= id.size() )
+                return false;
+            return id.find( ':', separator + 1u ) == std::string::npos;
+        }
+    } // namespace
+
+    void RegistryLoader::parsePrototypes( const json &root, const std::string &source,
+                                          const BlockRegistry &blocks, PrototypeRegistry &out )
+    {
+        if( !root.is_object() || !root.contains( "prototypes" ) || !root["prototypes"].is_array() )
+            throw RegistryError( source + ": expected an object with a 'prototypes' array" );
+
+        static const char *const allowed[] = {
+            "id", "displayName", "blockId", "capabilities"
+        };
+        const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
+
+        int index = 0;
+        for( const json &entry : root["prototypes"] )
+        {
+            ++index;
+            if( !entry.is_object() )
+                throw RegistryError( context( source, index ) + ": expected an object" );
+            checkUnknownFields( entry, source, index, allowed, allowedCount );
+
+            PrototypeDef def;
+            def.id = requireString( entry, source, index, "id" );
+            if( !isNamespacedId( def.id ) )
+                throw RegistryError( context( source, index ) +
+                                     ": prototype id '" + def.id +
+                                     "' must be namespaced as <namespace>:<name>" );
+            def.displayName = requireString( entry, source, index, "displayName" );
+            def.blockId = requireString( entry, source, index, "blockId" );
+            def.capabilities = optionalStringArray( entry, source, index, "capabilities" );
+
+            std::vector<std::string> seen;
+            for( const std::string &capability : def.capabilities )
+            {
+                if( std::find( seen.begin(), seen.end(), capability ) != seen.end() )
+                    throw RegistryError( context( source, index ) +
+                                         ": duplicate capability '" + capability + "'" );
+                seen.push_back( capability );
+            }
+
+            if( !blocks.contains( def.blockId ) )
+                throw RegistryError( context( source, index ) + ": prototype '" + def.id +
+                                     "' references unknown blockId '" + def.blockId + "'" );
+
+            out.insert( def );
+        }
+    }
+
+    bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
+                                         const BlockRegistry &blocks,
+                                         PrototypeRegistry &out )
+    {
+        const auto prototypesPath = dir / "prototypes.json";
+        std::error_code error;
+        if( !std::filesystem::exists( prototypesPath, error ) || error )
+            return false;
+
+        parsePrototypes( parseJson( readTextFile( prototypesPath, "prototypes.json" ),
+                                    prototypesPath.string() ),
+                         prototypesPath.string(), blocks, out );
+        return true;
+    }
 } // namespace world

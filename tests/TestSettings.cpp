@@ -50,6 +50,7 @@ TEST_CASE(settings_custom_values_are_loaded)
     std::ofstream out( path );
     out << R"({
       "schema_version": 1,
+      "mod": "Adventure",
       "window": {"width": 1920, "height": 1080, "fullscreen": true, "resizable": false},
       "world": {"chunk_render_distance": 7, "chunk_commits_per_update": 12},
       "camera": {"move_speed": 77.5, "mouse_sensitivity": 0.004},
@@ -69,6 +70,7 @@ TEST_CASE(settings_custom_values_are_loaded)
     out.close();
 
     const config::Settings settings = config::loadOrCreateSettings( path );
+    CHECK( settings.mod == "Adventure" );
     CHECK_EQ( settings.window.width, 1920 );
     CHECK( settings.window.fullscreen );
     CHECK_EQ( settings.world.chunkRenderDistance, 7 );
@@ -107,6 +109,7 @@ TEST_CASE(settings_save_roundtrip)
     config::Settings original;
     original.window.width = 2560;
     original.window.height = 1440;
+    original.mod = "MyMod";
     original.world.chunkRenderDistance = 5;
     original.camera.mouseSensitivity = 0.00325;
     original.debugHud.color = "#C080FFCC";
@@ -120,6 +123,7 @@ TEST_CASE(settings_save_roundtrip)
     CHECK_EQ( loaded.world.chunkRenderDistance, 5 );
     CHECK( loaded.camera.mouseSensitivity == 0.00325 );
     CHECK( loaded.debugHud.color == "#C080FFCC" );
+    CHECK( loaded.mod == "MyMod" );
     CHECK( loaded.debugHud.fontSizePx == 22.0f );
     CHECK( loaded.ogre.configOptions.at( "Some Future Ogre Option" ) == "Fancy" );
 }

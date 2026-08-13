@@ -62,7 +62,7 @@ See `docs/MATERIALS.md`. Core rule remains:
 texture -> color -> diagnostic fallback
 ```
 
-PBR properties are loaded from `data/blocks.json`; there is no hardcoded per-block material palette in the renderer.
+PBR properties are loaded from `MODS/Default/blocks.json`; there is no hardcoded per-block material palette in the renderer.
 
 ## Transparency and refraction
 

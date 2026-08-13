@@ -375,6 +375,27 @@
             "alphaCutoff": 0.5,
             "castShadows": false,
             "receiveShadows": false
+        },
+        {
+            "id": "core:cactus",
+            "displayName": "Cactus",
+            "tags": [
+                "decoration:plant",
+                "decoration:prickly"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": false,
+            "emission": 0,
+            "renderShape": "cross",
+            "texture": "textures/sugar_cane.png",
+            "roughness": 0.86,
+            "metalness": 0.0,
+            "reflection": 0.02,
+            "castShadows": false,
+            "alphaMode": "mask",
+            "alphaCutoff": 0.5,
+            "receiveShadows": false
         }
     ]
 }

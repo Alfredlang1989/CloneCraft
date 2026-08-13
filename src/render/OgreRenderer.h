@@ -4,6 +4,7 @@
 #include "ui/UiConfig.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -60,6 +61,13 @@ namespace render
         void setOgreConfig( const config::OgreSettings &config );
         void setDebugHudConfig( const config::DebugHudSettings &config );
 
+        /**
+         * Root directory for content-relative assets (ui textures, ...).
+         * Set before initialize(); may be empty when the game runs without
+         * any content root (the core must still start).
+         */
+        void setDataDirectory( const std::filesystem::path &dataDirectory );
+
         bool initialize( const platform::NativeWindowInfo &nativeInfo );
         void renderFrame();
 
@@ -108,6 +116,7 @@ namespace render
         ui::CrosshairConfig mCrosshairConfig;
         config::OgreSettings mOgreConfig;
         config::DebugHudSettings mDebugHudConfig;
+        std::filesystem::path mDataDirectory;
         int mViewportHeight = 720;
         std::unique_ptr<CrosshairOverlay> mCrosshairOverlay;
         std::unique_ptr<DebugOverlay> mDebugOverlay;

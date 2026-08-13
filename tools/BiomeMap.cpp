@@ -164,7 +164,7 @@ namespace
 
     struct Args
     {
-        std::filesystem::path dataDir = "data";
+        std::filesystem::path dataDir = "MODS/Default";
         std::filesystem::path output = "biome_map.png";
         int width = 1024;
         int height = 1024;

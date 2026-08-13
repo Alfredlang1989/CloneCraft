@@ -77,7 +77,7 @@ black shadow, positioned at the top-left of the viewport.
 
 ## Crosshair hover selection (v18.2)
 
-The centered crosshair and block selection are configured by `data/ui.json`. The
+The centered crosshair and block selection are configured by `MODS/Default/ui.json`. The
 crosshair texture path, pixel size and opacity are data-driven. The selected
 block outline has data-driven reach, RGBA colour/transparency, geometric
 thickness, expansion and depth testing.

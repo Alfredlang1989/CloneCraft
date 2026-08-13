@@ -284,6 +284,11 @@ namespace render
         mDebugHudConfig = config;
     }
 
+    void OgreRenderer::setDataDirectory( const std::filesystem::path &dataDirectory )
+    {
+        mDataDirectory = dataDirectory;
+    }
+
     bool OgreRenderer::initialize( const platform::NativeWindowInfo &nativeInfo )
     {
         try
@@ -525,8 +530,13 @@ namespace render
                                                Ogre::IdString( COMPOSITOR_DEF_NAME ), true );
 
         mCrosshairOverlay = std::make_unique<CrosshairOverlay>();
-        if( !mCrosshairOverlay->initialize( mRoot, mSceneManager, mCamera, mCrosshairConfig, "data",
-                                           nativeInfo.widthPx, nativeInfo.heightPx ) )
+        if( mDataDirectory.empty() )
+        {
+            core::logWarn( "No content root; skipping crosshair overlay" );
+        }
+        else if( !mCrosshairOverlay->initialize( mRoot, mSceneManager, mCamera, mCrosshairConfig,
+                                                 mDataDirectory,
+                                                 nativeInfo.widthPx, nativeInfo.heightPx ) )
         {
             core::logError( "Crosshair overlay initialization failed" );
             return false;

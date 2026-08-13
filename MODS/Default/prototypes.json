@@ -1,0 +1,12 @@
+{
+    "prototypes": [
+        {
+            "id": "default:cactus",
+            "displayName": "Cactus",
+            "blockId": "core:cactus",
+            "capabilities": [
+                "contact.damage"
+            ]
+        }
+    ]
+}

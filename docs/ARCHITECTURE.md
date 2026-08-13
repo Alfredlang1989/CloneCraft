@@ -43,6 +43,33 @@ engine logic itself.
         scripting/      LuaRuntime (controlled engine API)
         mods/           ModManager (manifest/JSON discovery, namespaces)
 
+## Content root and ownership contract
+
+Content lives strictly below the *content root*:
+
+    <install>/MODS/<mod>/          one directory per installed mod
+    <install>/MODS/Default/        always shipped; blocks, biomes, resources,
+                                   prototypes, worldgen.json + worldgen/*.lua,
+                                   ui.json + ui/, textures/
+
+The active mod is chosen by the `mod` key in `settings.json`
+(`config::Settings::mod`, default `Default`). `config::resolveContentRoot()`
+implements the contract:
+
+1. configured mod is a plain directory name (path traversal is rejected) and
+   `MODS/<mod>` exists  -> that directory
+2. otherwise `MODS/Default` exists -> `Default` (fallback)
+3. otherwise -> empty path; the C++ core must still start without content
+
+Ownership is strict: the core owns *mechanisms* (JSON/Lua parsing, voxel
+storage, worldgen engine, registry/handle machinery); content owns *concepts*
+(cactus, furnaces, biomes, geology rules). Core code must never hardcode a
+content id (`core:air` and the AIR runtime index are the only structural
+exceptions). Content ids are stable and namespaced; runtime handles are
+load-order independent hashes (see `docs/REGISTRY.md` "Runtime prototype
+handles"). The renderer receives the resolved content path from
+Application and tolerates an empty one.
+
 ## Main loop
 
     while (running) {
@@ -94,7 +121,7 @@ the complementary C++ AST/semantic pass. See `docs/STATIC_ANALYSIS.md`.
 The active chunk path loads Lua-backed scalar fields and generic JSON pass
 definitions, evaluates fields/passes concurrently, and deterministically merges
 `BlockProposal` arrays. Concrete rules such as stone, topsoil, gravel or cave
-subtraction live in `data/worldgen.json` and `data/worldgen/*.lua`.
+subtraction live in `MODS/Default/worldgen.json` and `MODS/Default/worldgen/*.lua`.
 
 The registry owns block semantic tags used by replacement rules and the biome
 terrain profiles. `WorldGen` receives the immutable `BiomeRegistry` once during

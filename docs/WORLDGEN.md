@@ -68,7 +68,7 @@ independent proposal array. Only the final merge is ordered.
 
 ## Lua fields
 
-A field entry in `data/worldgen.json` names a Lua script, dimensionality and an
+A field entry in `MODS/Default/worldgen.json` names a Lua script, dimensionality and an
 optional salt:
 
 ```json
@@ -145,7 +145,7 @@ reuses the prepared horizontal mapping for all 16 Y samples of a column.
 `surface_height.lua` is intentionally only the lowland macro relief. It stays
 near the river reference level instead of embedding a global mountain pedestal.
 After all 2D fields are sampled, `WorldGen` blends the terrain profiles from
-`data/biomes.json` into that surface.
+`MODS/Default/biomes.json` into that surface.
 
 A biome may name a `terrainMaskField`, for example `high_mountains_mask`. The
 mask is a continuous 0..1 weight. The unmasked biome is the fallback profile
@@ -442,7 +442,7 @@ reach test before discarding a chunk.
 a generic crossed-plane shape and emits two diagonal texture planes with both
 windings. Grass, flowers and sugar cane are ordinary blocks using this shape;
 their identity and PNG path remain registry data. The shipped plant/wood/leaf
-textures are static files under `data/textures/`, not images synthesized by C++
+textures are static files under `MODS/Default/textures/`, not images synthesized by C++
 at runtime.
 
 Current shipped decoration data contains tall grass, dandelions, poppies, river

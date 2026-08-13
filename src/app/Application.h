@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera/FreeCameraController.h"
+#include "config/ContentRoot.h"
 #include "config/Settings.h"
 #include "input/InputManager.h"
 #include "platform/PlatformWindowBridge.h"
@@ -15,6 +16,7 @@
 #include "world/interaction/BlockPicker.h"
 #include "world/coordinates/StickyGroupAnchor.h"
 #include "world/registry/BlockIdTable.h"
+#include "world/registry/PrototypeIdTable.h"
 #include "world/registry/Registry.h"
 #include "world/worldgen/WorldGen.h"
 
@@ -63,7 +65,10 @@ namespace app
         world::BlockRegistry mBlocks;
         world::BiomeRegistry mBiomes;
         world::ResourceRegistry mResources;
+        world::PrototypeRegistry mPrototypes;
         world::BlockIdTable mIdTable;
+        std::unique_ptr<world::PrototypeIdTable> mPrototypeIds;
+        config::ContentRoot mContentRoot;
         worldgen::WorldGenConfig mGenConfig;
         std::unique_ptr<worldgen::WorldGen> mWorldGen;
         world::ChunkManager mChunks;

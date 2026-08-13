@@ -72,7 +72,8 @@ if(OMNIGRID_BUILD_APP)
 endif()
 
 add_library(omnigrid_config STATIC
-  src/config/Settings.cpp)
+  src/config/Settings.cpp
+  src/config/ContentRoot.cpp)
 target_include_directories(omnigrid_config PUBLIC src)
 set_target_properties(omnigrid_config PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_link_libraries(omnigrid_config PUBLIC nlohmann_json::nlohmann_json)
@@ -102,7 +103,8 @@ target_link_libraries(omnigrid_ui PUBLIC nlohmann_json::nlohmann_json)
 
 add_library(omnigrid_registry STATIC
   src/world/registry/BlockIdTable.cpp
-  src/world/registry/RegistryLoader.cpp)
+  src/world/registry/RegistryLoader.cpp
+  src/world/registry/PrototypeIdTable.cpp)
 target_include_directories(omnigrid_registry PUBLIC src)
 set_target_properties(omnigrid_registry PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_link_libraries(omnigrid_registry PUBLIC nlohmann_json::nlohmann_json)
@@ -200,41 +202,52 @@ target_include_directories(test_settings PRIVATE src)
 target_link_libraries(test_settings PRIVATE omnigrid_config)
 add_test(NAME settings COMMAND test_settings)
 
+add_executable(test_content_root tests/TestContentRoot.cpp)
+target_include_directories(test_content_root PRIVATE src)
+target_link_libraries(test_content_root PRIVATE omnigrid_config)
+add_test(NAME content_root COMMAND test_content_root)
+
 add_executable(test_coordinates tests/TestCoordinates.cpp)
 target_link_libraries(test_coordinates PRIVATE omnigrid_world)
 add_test(NAME coordinates COMMAND test_coordinates)
 
 add_executable(test_registries tests/TestRegistries.cpp)
 target_include_directories(test_registries PRIVATE src)
-target_compile_definitions(test_registries PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(test_registries PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_registries PRIVATE omnigrid_registry)
 add_test(NAME registries COMMAND test_registries)
+
+add_executable(test_prototypes tests/TestPrototypes.cpp)
+target_include_directories(test_prototypes PRIVATE src)
+target_compile_definitions(test_prototypes PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
+target_link_libraries(test_prototypes PRIVATE omnigrid_registry)
+add_test(NAME prototypes COMMAND test_prototypes)
 
 add_executable(test_worldgen tests/TestWorldGen.cpp)
 target_include_directories(test_worldgen PRIVATE src)
 target_compile_definitions(test_worldgen PRIVATE
-  OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+  OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default"
   OMNIGRID_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data")
 target_link_libraries(test_worldgen PRIVATE omnigrid_worldgen)
 add_test(NAME worldgen COMMAND test_worldgen)
 
 add_executable(test_chunk tests/TestChunk.cpp)
 target_include_directories(test_chunk PRIVATE src)
-target_compile_definitions(test_chunk PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(test_chunk PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_chunk PRIVATE omnigrid_chunk)
 add_test(NAME chunk COMMAND test_chunk)
 
 add_executable(test_streaming tests/TestStreaming.cpp)
 target_include_directories(test_streaming PRIVATE src)
 target_compile_definitions(test_streaming PRIVATE
-  OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+  OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default"
   OMNIGRID_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data")
 target_link_libraries(test_streaming PRIVATE omnigrid_chunk)
 add_test(NAME streaming COMMAND test_streaming)
 
 add_executable(test_chunkmesh tests/TestChunkMesh.cpp)
 target_include_directories(test_chunkmesh PRIVATE src)
-target_compile_definitions(test_chunkmesh PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(test_chunkmesh PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_chunkmesh PRIVATE omnigrid_mesh)
 add_test(NAME chunkmesh COMMAND test_chunkmesh)
 
@@ -253,13 +266,13 @@ add_test(NAME worldgen_features COMMAND test_worldgen_features)
 
 add_executable(test_worldgen_morphology tests/TestWorldGenMorphology.cpp)
 target_include_directories(test_worldgen_morphology PRIVATE src third_party)
-target_compile_definitions(test_worldgen_morphology PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(test_worldgen_morphology PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_worldgen_morphology PRIVATE omnigrid_worldgen)
 add_test(NAME worldgen_morphology COMMAND test_worldgen_morphology)
 
 add_executable(test_biome_distribution tests/TestBiomeDistribution.cpp)
 target_include_directories(test_biome_distribution PRIVATE src third_party)
-target_compile_definitions(test_biome_distribution PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(test_biome_distribution PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_biome_distribution PRIVATE omnigrid_worldgen)
 add_test(NAME biome_distribution COMMAND test_biome_distribution)
 
@@ -273,7 +286,7 @@ add_test(NAME dynamic_space COMMAND test_dynamic_space)
 
 add_executable(test_ui_config tests/TestUiConfig.cpp)
 target_include_directories(test_ui_config PRIVATE src)
-target_compile_definitions(test_ui_config PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_compile_definitions(test_ui_config PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_ui_config PRIVATE omnigrid_ui)
 add_test(NAME ui_config COMMAND test_ui_config)
 

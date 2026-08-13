@@ -6,24 +6,33 @@
   `INDEX.plan` is on the OmniGrid/agent workflow (read-first order, Graphify
   rules, AST-vs-Graphify split, end-of-run gate); `docs/MILESTONES.md` is
   synced with the Primus-impetus roadmap; this file describes the current state.
-- M01 — Rename (#14): **in progress, uncommitted**. A CloneCraft -> OmniGrid
-  branding sweep sits in the working tree (docs, build names, env var names,
-  source comments) but has not been committed. It is foreign working-tree work
-  and is not part of the M00 commit. Persistent technical ids (block ids,
-  mod namespaces, save/protocol identities) remain untouched.
-- M02 — Worldgen baseline (#8): **done** (commit pending). Desert climate
+- M01 — Rename (#14): **done** (committed `ce72acc` + `17bbcf9`). A
+  CloneCraft -> OmniGrid branding sweep (docs, build names, env var names,
+  source comments, window/application titles) is committed. Persistent
+  technical ids (block ids, mod namespaces, save/protocol identities) remain
+  untouched.
+- M02 — Worldgen baseline (#8): **done** (committed `502c299`). Desert climate
   distribution broadened with a shaped hot*dry response (selection bands and
   fades, no pure threshold lowering); `BiomeDef::weight` semantics defined and
   proven as a relative competition multiplier; determinism, statistics,
   hierarchy/boundary and normalization tests added for seed 1337 and seed 4242
   (`tests/TestBiomeDistribution.cpp`, 6 cases); `docs/WORLDGEN.md` documents
   the competition math and the frozen distribution baseline.
-- Core spine #3 (contracts/sidecars/world state/actions/events/enTT/RocksDB),
+- M03 — Contracts + prototype foundation (#3): **in progress**. Content root
+  contract (`MODS/<mod>`, `MODS/Default` fallback, empty-root core start,
+  path-traversal-safe mod names) in `config::ContentRoot`; `prototypes.json`
+  registry with stable namespaced ids, load-order-independent FNV-1a runtime
+  handles (`PrototypeIdTable`, collision detection), block-to-prototype bridge
+  and `WorldObjectRef`; pilot block `default:cactus` (`core:cactus` block);
+  `settings.json` gains the `mod` key; content moved `data/` -> `MODS/Default/`;
+  ownership contract documented in `docs/ARCHITECTURE.md`. Suites: 18/18 PASS.
+- Core spine #3 (sidecars/world state/actions/events/enTT/RocksDB),
   #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
   #16/#17 (construction): **not started**.
 - Baseline gates at M00 time: architecture check PASS, clang-tidy/AST PASS,
   15/15 renderer-independent ctest suites PASS. At M02 time the same gates PASS
-  with 16/16 suites (new `biome_distribution` suite).
+  with 16/16 suites (new `biome_distribution` suite). At M03 time 18/18 suites
+  (new `content_root` + `prototypes` suites).
 
 ## Current state
 

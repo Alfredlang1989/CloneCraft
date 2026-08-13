@@ -1,6 +1,6 @@
 # REGISTRY
 
-Content definitions live in JSON under `data/`. Runtime numeric block ids are
+Content definitions live in JSON under the content root (`MODS/Default/`). Runtime numeric block ids are
 compact implementation details; persistent/data-facing ids are namespaced
 strings such as `core:stone`.
 
@@ -106,7 +106,7 @@ shipped data writes detail scale/amplitude explicitly so terrain tuning does not
 depend on hidden C++ constants.
 
 `surfaceBlock`/`fillerBlock` remain registry metadata and valid block references, but
-the active material graph places surfaces through `data/worldgen.json` passes rather
+the active material graph places surfaces through `MODS/Default/worldgen.json` passes rather
 than switching on biome ids in C++.
 
 ## resources.json
@@ -131,6 +131,37 @@ referenced resource explicitly.
 Unknown fields, duplicates, wrong types/ranges and invalid cross-references fail
 with a message that includes source/entry context. JSON syntax is validated as
 part of the repair checks.
+
+## prototypes.json
+
+Prototypes are the *logical* identity layer on top of physical block ids:
+a voxel stores a compact block index, while gameplay refers to a stable
+namespaced prototype id such as `default:cactus`. The file is optional — a
+content root without prototypes is legal.
+
+| Field | Type | Required | Default | Meaning |
+|---|---:|---:|---|---|
+| `id` | string | yes | - | namespaced prototype id (`<namespace>:<name>`, both non-empty) |
+| `displayName` | string | yes | - | user-facing name |
+| `blockId` | string | yes | - | linked physical block; must exist in `blocks.json` |
+| `capabilities` | array of string | no | empty | declared capabilities/slots (pure declarations until the signal/slot layer) |
+
+Validation: duplicate ids, non-namespaced ids, unknown `blockId` references,
+duplicate capabilities and unknown fields are rejected with source/entry context.
+
+### Runtime prototype handles
+
+`PrototypeIdTable` maps prototype ids to stable 32-bit handles (FNV-1a hash of
+the id). Handles never depend on load or insertion order, so the same content
+loaded in different orders always produces the same handle. Hash collisions are
+detected and rejected at construction time.
+
+### Block-to-prototype bridge
+
+`world::prototypeForBlock( registry, blockId )` returns the first prototype
+whose `blockId` matches, or `nullptr`. Most blocks are pure scenery and are not
+referenced by any prototype. `world::WorldObjectRef` (position + prototype id)
+is the M03 foundation of the unified world-state API (M05).
 
 ## Block semantic tags
 

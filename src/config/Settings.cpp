@@ -88,6 +88,7 @@ namespace config
 
             return json{
                 { "schema_version", settings.schemaVersion },
+                { "mod", settings.mod },
                 { "window", {
                     { "width", settings.window.width },
                     { "height", settings.window.height },
@@ -141,6 +142,15 @@ namespace config
                 if( out.schemaVersion != 1u )
                     throw std::runtime_error( path.string() + ": unsupported settings schema_version " +
                                               std::to_string( out.schemaVersion ) );
+            }
+
+            if( root.contains( "mod" ) )
+            {
+                if( !root["mod"].is_string() )
+                    throw std::runtime_error( path.string() + ": mod must be a string" );
+                out.mod = root["mod"].get<std::string>();
+                if( out.mod.empty() )
+                    throw std::runtime_error( path.string() + ": mod must not be empty" );
             }
 
             if( root.contains( "window" ) )
