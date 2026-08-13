@@ -394,6 +394,17 @@ TTF under the HLMS tree. An existing Linux system TTF is a non-installing
 fallback. Initialization logs now identify the exact font/resource stage that
 failed.
 
+## Debug HUD shader source fix (M04 follow-up)
+
+The debug resource group mounted `2.0/scripts/materials/Common` recursively.
+OgreNext's `openResource` only resolves exact index names: recursive mounting
+indexes the compositor shader sources as `GLSL/Quad_vs.glsl`, while the
+`.program` scripts request `Quad_vs.glsl` flat, producing the startup flood of
+"Cannot locate resource ... .glsl" / "High-level program ... not supported"
+messages. Like OgreNext's own `resources2.cfg`, the `GLSL` directory is now
+mounted as a separate non-recursive location (documented in `docs/DEBUG_HUD.md`).
+
+
 
 ## v18.2 — bundled JSON + crosshair block hover
 

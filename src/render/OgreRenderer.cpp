@@ -69,9 +69,13 @@ namespace render
 
         /**
          * Register Ogre's official sample/debug resources without assuming they
-         * have been flattened into the HLMS directory. OgreNext's own application
-         * guide recommends Media/2.0/scripts/materials/Common together with
-         * Media/packs/DebugPack.zip for text/debug rendering.
+         * have been flattened into the HLMS directory. OgreNext's own resources2.cfg
+         * mounts the script directory and each shader-language subdirectory
+         * separately and NON-recursively. That is required: the .program scripts
+         * reference their sources by flat name ("source Quad_vs.glsl"), while
+         * recursive mounting indexes them as "GLSL/Quad_vs.glsl", which
+         * ResourceGroupManager::openResource never resolves and which turns into
+         * a flood of "High-level program not supported" errors.
          *
          * Missing optional debug media must never prevent the 3D renderer from
          * starting. The DebugOverlay has a second-stage system-font fallback.
@@ -86,18 +90,33 @@ namespace render
 
             const fs::path mediaRoot( OGRE_NEXT_MEDIA_DIR );
             const fs::path commonScripts = mediaRoot / "2.0/scripts/materials/Common";
+            const fs::path commonShaders = commonScripts / "GLSL";
             const fs::path debugPack = mediaRoot / "packs/DebugPack.zip";
 
             if( fs::is_directory( commonScripts ) )
             {
                 resources.addResourceLocation( commonScripts.string(), "FileSystem",
-                                               DEBUG_RESOURCE_GROUP, true );
+                                               DEBUG_RESOURCE_GROUP, false );
                 core::logInfo( "Debug HUD resource path: " + commonScripts.string() );
             }
             else
             {
                 core::logWarn( "Ogre debug material directory not found: " +
                                commonScripts.string() );
+            }
+
+            // The GLSL sources of the compositor programs (Quad_vs.glsl, ...)
+            // live in a subdirectory; mount it separately, non-recursively.
+            if( fs::is_directory( commonShaders ) )
+            {
+                resources.addResourceLocation( commonShaders.string(), "FileSystem",
+                                               DEBUG_RESOURCE_GROUP, false );
+                core::logInfo( "Debug HUD shader sources: " + commonShaders.string() );
+            }
+            else
+            {
+                core::logWarn( "Ogre debug shader sources not found: " +
+                               commonShaders.string() );
             }
 
             if( fs::is_regular_file( debugPack ) )

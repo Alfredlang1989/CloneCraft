@@ -66,10 +66,17 @@ are registered by `OgreRenderer`.
 
 No font file is copied into Omnigrid. The renderer follows OgreNext's official
 debug-resource layout first: `Media/2.0/scripts/materials/Common` plus
-`Media/packs/DebugPack.zip`, and uses the `DebugFont` declared there. If an
-installation does not ship that sample pack, Omnigrid exposes an already
-installed system TTF through a dedicated Ogre resource group and creates
-`Omnigrid/DebugFont` from it. It never installs or copies a system font.
+`Media/packs/DebugPack.zip`, and uses the `DebugFont` declared there. Like
+OgreNext's own `resources2.cfg`, the `GLSL` shader-source subdirectory is
+mounted as a separate non-recursive resource location: the `.program` scripts
+reference their sources by flat name (`source Quad_vs.glsl`), and recursive
+mounting would index them as `GLSL/Quad_vs.glsl`, which
+`ResourceGroupManager::openResource` never resolves (symptom: a flood of
+"High-level program ... not supported" + "Cannot locate resource ... .glsl"
+messages at startup). If an installation does not ship that sample pack,
+Omnigrid exposes an already installed system TTF through a dedicated Ogre
+resource group and creates `Omnigrid/DebugFont` from it. It never installs or
+copies a system font.
 
 The visual style is deliberately simple: white diagnostic text plus an offset
 black shadow, positioned at the top-left of the viewport.
