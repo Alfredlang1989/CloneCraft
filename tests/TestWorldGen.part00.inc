@@ -3,8 +3,10 @@
 #include "world/coordinates/Coords.h"
 #include "world/worldgen/WorldGen.h"
 #include "world/worldgen/WorldGenConfigLoader.h"
+#include "world/worldgen/LuaFieldEvaluator.h"
 #include "world/registry/RegistryLoader.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <vector>
 
@@ -159,18 +161,89 @@ TEST_CASE(default_biome_terrain_has_lowlands_and_real_mountains)
     worldgen::WorldGen gen( cfg, blocks, table, biomes );
 
     std::vector<std::int64_t> heights;
-    for( int gx = -8; gx <= 8; ++gx )
-        for( int gz = -8; gz <= 8; ++gz )
+    for( int gx = -24; gx <= 24; ++gx )
+        for( int gz = -24; gz <= 24; ++gz )
         {
             const world::BlockAddress column = world::fromOriginOffset(
-                static_cast<std::int64_t>( gx ) * 512, 0,
-                static_cast<std::int64_t>( gz ) * 512 );
+                static_cast<std::int64_t>( gx ) * 4096, 0,
+                static_cast<std::int64_t>( gz ) * 4096 );
             heights.push_back( gen.surfaceHeight( column ) );
         }
 
     const auto [minIt, maxIt] = std::minmax_element( heights.begin(), heights.end() );
     CHECK( *minIt < 40 );
     CHECK( *maxIt > 120 );
+}
+
+TEST_CASE(default_ocean_and_lake_fields_materialize_as_real_water)
+{
+    world::BlockRegistry blocks;
+    world::BiomeRegistry biomes;
+    world::ResourceRegistry resources;
+    world::RegistryLoader::loadFromDirectory( CLONECRAFT_DATA_DIR, blocks, biomes, resources );
+    world::BlockIdTable table( blocks );
+    const auto cfg = worldgen::loadWorldGenConfig(
+        std::filesystem::path( CLONECRAFT_DATA_DIR ) / "worldgen.json" );
+    worldgen::WorldGen gen( cfg, blocks, table, biomes );
+
+    const auto findField = [&]( const std::string &id ) -> const worldgen::FieldConfig * {
+        const auto it = std::find_if( cfg.fields.begin(), cfg.fields.end(),
+            [&]( const worldgen::FieldConfig &field ) { return field.id == id; } );
+        return it == cfg.fields.end() ? nullptr : &*it;
+    };
+    const auto *oceanCfg = findField( "ocean_mask" );
+    const auto *lakeCfg = findField( "lake_mask" );
+    const auto *lakeLevelCfg = findField( "lake_level" );
+    CHECK( oceanCfg != nullptr );
+    CHECK( lakeCfg != nullptr );
+    CHECK( lakeLevelCfg != nullptr );
+    if( !oceanCfg || !lakeCfg || !lakeLevelCfg ) return;
+
+    worldgen::LuaFieldEvaluator ocean( *oceanCfg, cfg.seed );
+    worldgen::LuaFieldEvaluator lake( *lakeCfg, cfg.seed );
+    worldgen::LuaFieldEvaluator lakeLevel( *lakeLevelCfg, cfg.seed );
+
+    const auto blockAt = [&]( const world::BlockAddress &point ) {
+        std::vector<std::uint16_t> ids( static_cast<std::size_t>( world::chunkVolume() ) );
+        gen.generateChunkIds( point.chunk, ids );
+        const std::size_t edge = static_cast<std::size_t>( world::BLOCKS_PER_CHUNK_EDGE );
+        const std::size_t index =
+            ( ( static_cast<std::size_t>( point.block.x ) * edge +
+                static_cast<std::size_t>( point.block.y ) ) * edge +
+              static_cast<std::size_t>( point.block.z ) );
+        return ids[index];
+    };
+
+    std::optional<world::BlockAddress> oceanPoint;
+    for( std::int64_t x = -131072; x <= 131072 && !oceanPoint; x += 4096 )
+        for( std::int64_t z = -131072; z <= 131072; z += 4096 )
+        {
+            const world::BlockAddress p = world::fromOriginOffset( x, 0, z );
+            if( ocean.sample2D( p ) > 0.88 ) { oceanPoint = p; break; }
+        }
+    CHECK( oceanPoint.has_value() );
+    if( oceanPoint )
+    {
+        CHECK( gen.surfaceHeight( *oceanPoint ) < 0 );
+        const world::BlockAddress waterPoint = world::withOriginRelativeY( *oceanPoint, 0 );
+        CHECK_EQ( blockAt( waterPoint ), table.indexOf( "core:water" ) );
+    }
+
+    std::optional<world::BlockAddress> lakePoint;
+    for( std::int64_t x = -131072; x <= 131072 && !lakePoint; x += 1024 )
+        for( std::int64_t z = -131072; z <= 131072; z += 1024 )
+        {
+            const world::BlockAddress p = world::fromOriginOffset( x, 0, z );
+            if( ocean.sample2D( p ) < 0.20 && lake.sample2D( p ) > 0.72 )
+            { lakePoint = p; break; }
+        }
+    CHECK( lakePoint.has_value() );
+    if( lakePoint )
+    {
+        const std::int64_t y = static_cast<std::int64_t>( std::floor( lakeLevel.sample2D( *lakePoint ) ) );
+        const world::BlockAddress waterPoint = world::withOriginRelativeY( *lakePoint, y );
+        CHECK_EQ( blockAt( waterPoint ), table.indexOf( "core:water" ) );
+    }
 }
 
 TEST_CASE(default_lowland_river_has_sloped_bed_low_banks_and_sealed_substrate)

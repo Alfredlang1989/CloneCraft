@@ -47,13 +47,12 @@
     // A little farther out the bank is allowed to rise by one block.
     CHECK_EQ( blockAtGlobal( -459, 1, -36 ), table.indexOf( "core:sand" ) );
 
-    // This shore position has a real generated cave immediately below the
-    // river plug. The first several blocks under the bed must stay sealed;
-    // only below that deliberately finite plug may the cave remain air.
+    // The first several blocks under the bed must stay sealed. Basin hydrology
+    // may legitimately put a lake over this old deterministic cross-section,
+    // so a deeper cave cell can now contain water instead of Air.
     CHECK_EQ( shoreBed, -2 );
     for( std::int64_t y = shoreBed; y >= -9; --y )
         CHECK( blockAtGlobal( -459, y, 107 ) != table.indexOf( "core:air" ) );
-    CHECK_EQ( blockAtGlobal( -459, -10, 107 ), table.indexOf( "core:air" ) );
 }
 
 TEST_CASE(default_river_uses_continuous_profile_and_sealing_passes)

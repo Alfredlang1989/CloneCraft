@@ -175,6 +175,24 @@
                 "ridgeSharpness": 3.1
             },
             "terrainMaskField": "high_mountains_mask"
+        },
+        {
+            "id": "core:ocean",
+            "displayName": "Ocean",
+            "surfaceBlock": "core:sand",
+            "fillerBlock": "core:sandstone",
+            "temperature": 0.5,
+            "rainfall": 1.0,
+            "continentalness": 0.0,
+            "weight": 1.0,
+            "terrain": {
+                "heightOffset": -38.0,
+                "heightMultiplier": 0.42,
+                "detailAmplitude": 5.0,
+                "detailScale": 0.00065,
+                "detailMultiplier": 1.0
+            },
+            "terrainMaskField": "ocean_mask"
         }
     ]
 }

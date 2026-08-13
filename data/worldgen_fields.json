@@ -13,6 +13,69 @@
             "script": "worldgen/massif_mask.lua",
             "function": "sample",
             "salt": 1000
+        },
+        {
+            "id": "ocean_mask",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "ocean_mask",
+            "salt": 1000
+        },
+        {
+            "id": "land_mask",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "land_mask",
+            "salt": 1000
+        },
+        {
+            "id": "ocean_level",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "ocean_level",
+            "salt": 1000
+        },
+        {
+            "id": "ocean_water_bottom",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "ocean_water_bottom",
+            "salt": 1000
+        },
+        {
+            "id": "lake_mask",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "lake_mask",
+            "salt": 1000
+        },
+        {
+            "id": "lake_level",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "lake_level",
+            "salt": 1000
+        },
+        {
+            "id": "lake_bottom",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "lake_bottom",
+            "salt": 1000
+        },
+        {
+            "id": "lake_water_bottom",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "lake_water_bottom",
+            "salt": 1000
+        },
+        {
+            "id": "lake_shore_mask",
+            "dimension": "2d",
+            "script": "worldgen/hydrology.lua",
+            "function": "lake_shore_mask",
+            "salt": 1000
         }
     ]
 }

@@ -52,15 +52,37 @@ TEST_CASE(default_sugar_cane_is_decoration_on_final_river_bank_surface)
 
     worldgen::WorldGen gen( cfg, blocks, table, biomes );
     const std::uint16_t cane = table.indexOf( "core:sugar_cane" );
+
+    const auto routeField = std::find_if( cfg.fields.begin(), cfg.fields.end(),
+        []( const worldgen::FieldConfig &field ) { return field.id == "river_valley_mask"; } );
+    CHECK( routeField != cfg.fields.end() );
+    if( routeField == cfg.fields.end() ) return;
+    worldgen::LuaFieldEvaluator route( *routeField, cfg.seed );
+
+    // Do not assume that one old hard-coded coordinate is still land after
+    // continent generation. Find deterministic river-bank candidates at world
+    // scale and inspect a small neighbourhood around them.
     std::size_t caneBlocks = 0u;
-    for( std::int64_t x = -480; x <= -432; x += world::BLOCKS_PER_CHUNK_EDGE )
-        for( std::int64_t z = 32; z <= 128; z += world::BLOCKS_PER_CHUNK_EDGE )
+    int candidates = 0;
+    for( std::int64_t x = -65536; x <= 65536 && caneBlocks == 0u; x += 64 )
+        for( std::int64_t z = -65536; z <= 65536 && caneBlocks == 0u; z += 64 )
         {
-            const world::ChunkAddress chunk = world::fromOriginOffset( x, 0, z ).chunk;
-            std::vector<std::uint16_t> ids( static_cast<std::size_t>( world::chunkVolume() ) );
-            gen.generateChunkIds( chunk, ids );
-            caneBlocks += static_cast<std::size_t>( std::count( ids.begin(), ids.end(), cane ) );
+            const world::BlockAddress p = world::fromOriginOffset( x, 0, z );
+            const double d = route.sample2D( p );
+            if( d < 0.031 || d > 0.060 ) continue;
+            if( ++candidates > 48 ) break;
+
+            const world::ChunkAddress center = p.chunk;
+            for( int dx = -1; dx <= 1; ++dx )
+                for( int dz = -1; dz <= 1; ++dz )
+                {
+                    const world::ChunkAddress chunk = world::offsetChunk( center, dx, 0, dz );
+                    std::vector<std::uint16_t> ids( static_cast<std::size_t>( world::chunkVolume() ) );
+                    gen.generateChunkIds( chunk, ids );
+                    caneBlocks += static_cast<std::size_t>( std::count( ids.begin(), ids.end(), cane ) );
+                }
         }
+    CHECK( candidates > 0 );
     CHECK( caneBlocks > 0u );
 }
 

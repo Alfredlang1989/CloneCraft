@@ -1,0 +1,115 @@
+{
+    "passes": [
+        {
+            "id": "ocean_floor_sand",
+            "type": "surface_layer",
+            "stage": "terrain",
+            "block": "core:sand",
+            "priority": 66,
+            "surfaceField": "surface_height",
+            "thickness": 3,
+            "maskField": "ocean_mask",
+            "maskCondition": {
+                "op": "gt",
+                "value": 0.45
+            },
+            "replaceTags": [
+                "terrain:rock",
+                "terrain:soil",
+                "terrain:sediment",
+                "terrain:snow"
+            ]
+        },
+        {
+            "id": "lake_carve",
+            "type": "surface_layer",
+            "stage": "addon",
+            "block": "core:air",
+            "priority": 180,
+            "surfaceField": "surface_height",
+            "bottomField": "lake_bottom",
+            "maskField": "lake_mask",
+            "maskCondition": {
+                "op": "gt",
+                "value": 0.48
+            },
+            "replaceTags": [
+                "terrain:carvable"
+            ]
+        },
+        {
+            "id": "lake_bed",
+            "type": "surface_layer",
+            "stage": "addon",
+            "block": "core:sand",
+            "priority": 182,
+            "surfaceField": "lake_bottom",
+            "thickness": 3,
+            "maskField": "lake_mask",
+            "maskCondition": {
+                "op": "gt",
+                "value": 0.48
+            },
+            "replaceBlocks": [
+                "core:air"
+            ],
+            "replaceTags": [
+                "terrain:rock",
+                "terrain:soil",
+                "terrain:sediment"
+            ]
+        },
+        {
+            "id": "lake_shore",
+            "type": "surface_layer",
+            "stage": "addon",
+            "block": "core:sand",
+            "priority": 184,
+            "surfaceField": "surface_height",
+            "thickness": 2,
+            "maskField": "lake_shore_mask",
+            "maskCondition": {
+                "op": "gt",
+                "value": 0.35
+            },
+            "replaceTags": [
+                "terrain:soil",
+                "terrain:sediment"
+            ]
+        },
+        {
+            "id": "lake_water",
+            "type": "surface_layer",
+            "stage": "addon",
+            "block": "core:water",
+            "priority": 190,
+            "surfaceField": "lake_level",
+            "bottomField": "lake_water_bottom",
+            "maskField": "lake_mask",
+            "maskCondition": {
+                "op": "gt",
+                "value": 0.48
+            },
+            "replaceBlocks": [
+                "core:air"
+            ]
+        },
+        {
+            "id": "ocean_water",
+            "type": "surface_layer",
+            "stage": "addon",
+            "block": "core:water",
+            "priority": 200,
+            "surfaceField": "ocean_level",
+            "bottomField": "ocean_water_bottom",
+            "maskField": "ocean_mask",
+            "maskCondition": {
+                "op": "gt",
+                "value": 0.45
+            },
+            "replaceBlocks": [
+                "core:air"
+            ]
+        }
+    ]
+}

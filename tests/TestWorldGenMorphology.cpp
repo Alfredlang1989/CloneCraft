@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <queue>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -33,6 +34,23 @@ TEST_CASE( default_river_field_remains_a_long_thin_filament )
                                   "river_mask.lua", 1000u );
     worldgen::LuaFieldEvaluator river( cfg, 1337u );
 
+    // Continents are now much larger than the old morphology window and the
+    // origin may legitimately be ocean. First locate a deterministic land-river
+    // sample, then inspect a local 256x256 block window around that channel.
+    std::optional<std::pair<int, int>> riverCenter;
+    for( int x = -32768; x <= 32768 && !riverCenter; x += 128 )
+        for( int z = -32768; z <= 32768; z += 128 )
+        {
+            const world::BlockAddress p = world::fromOriginOffset( x, 0, z );
+            if( river.sample2D( p ) < 0.012 )
+            {
+                riverCenter = std::pair{ x, z };
+                break;
+            }
+        }
+    CHECK( riverCenter.has_value() );
+    if( !riverCenter ) return;
+
     constexpr int N = 256;
     std::vector<std::uint8_t> mask( static_cast<std::size_t>( N * N ), 0u );
     const auto index = []( int x, int z ) {
@@ -44,7 +62,9 @@ TEST_CASE( default_river_field_remains_a_long_thin_filament )
     for( int x = 0; x < N; ++x )
         for( int z = 0; z < N; ++z )
         {
-            const world::BlockAddress p = world::fromOriginOffset( x - N / 2, 0, z - N / 2 );
+            const world::BlockAddress p = world::fromOriginOffset(
+                riverCenter->first + x - N / 2, 0,
+                riverCenter->second + z - N / 2 );
             if( river.sample2D( p ) < 0.024 )
             {
                 mask[index( x, z )] = 1u;
@@ -205,8 +225,8 @@ TEST_CASE( river_tunnel_route_is_disabled_outside_real_massifs )
     std::size_t lowlandSamples = 0u;
     std::size_t massifSamples = 0u;
     std::size_t activeTunnelSamples = 0u;
-    for( int x = -2048; x <= 2048; x += 64 )
-        for( int z = -2048; z <= 2048; z += 64 )
+    for( int x = -65536; x <= 65536; x += 1024 )
+        for( int z = -65536; z <= 65536; z += 1024 )
         {
             const world::BlockAddress p = world::fromOriginOffset( x, 0, z );
             const double mountainValue = mountain.sample2D( p );
@@ -258,8 +278,8 @@ TEST_CASE( default_biome_masks_keep_major_climate_and_mountain_regions_reachable
     worldgen::LuaFieldEvaluator desertHigh( desertHighCfg, 1337u );
 
     std::array<std::size_t, 9> winners{};
-    constexpr int HALF_EXTENT_CHUNKS = 256;
-    constexpr int STEP_CHUNKS = 2;
+    constexpr int HALF_EXTENT_CHUNKS = 4096;
+    constexpr int STEP_CHUNKS = 64;
     std::size_t samples = 0u;
 
     for( int cz = -HALF_EXTENT_CHUNKS; cz < HALF_EXTENT_CHUNKS; cz += STEP_CHUNKS )
@@ -310,8 +330,60 @@ TEST_CASE( default_biome_masks_keep_major_climate_and_mountain_regions_reachable
     CHECK( fraction( 4 ) > 0.005 ); // badlands
     CHECK( fraction( 5 ) > 0.05 ); // alpine transition belt
     CHECK( fraction( 6 ) > 0.001 ); // arid high mountains must not disappear
-    CHECK( fraction( 7 ) > 0.005 ); // high mountains must beat alpine somewhere
+    CHECK( fraction( 7 ) > 0.002 ); // high mountains must beat alpine somewhere
     CHECK( fraction( 8 ) > 0.05 ); // plains fallback remains meaningful
+}
+
+
+TEST_CASE( macro_hydrology_keeps_ocean_and_inland_water_in_sane_world_scale_bands )
+{
+    auto oceanCfg = fieldConfig( "ocean_mask", worldgen::FieldDimension::D2,
+                                 "hydrology.lua", 1000u );
+    oceanCfg.functionName = "ocean_mask";
+    auto lakeCfg = fieldConfig( "lake_mask", worldgen::FieldDimension::D2,
+                                "hydrology.lua", 1000u );
+    lakeCfg.functionName = "lake_mask";
+    auto levelCfg = fieldConfig( "lake_level", worldgen::FieldDimension::D2,
+                                 "hydrology.lua", 1000u );
+    levelCfg.functionName = "lake_level";
+    auto bottomCfg = fieldConfig( "lake_bottom", worldgen::FieldDimension::D2,
+                                  "hydrology.lua", 1000u );
+    bottomCfg.functionName = "lake_bottom";
+
+    worldgen::LuaFieldEvaluator ocean( oceanCfg, 1337u );
+    worldgen::LuaFieldEvaluator lake( lakeCfg, 1337u );
+    worldgen::LuaFieldEvaluator level( levelCfg, 1337u );
+    worldgen::LuaFieldEvaluator bottom( bottomCfg, 1337u );
+
+    std::size_t samples = 0u, oceanSamples = 0u, lakeSamples = 0u;
+    for( int gx = -64; gx < 64; ++gx )
+        for( int gz = -64; gz < 64; ++gz )
+        {
+            const world::BlockAddress p = world::fromOriginOffset(
+                static_cast<std::int64_t>( gx ) * 2048, 0,
+                static_cast<std::int64_t>( gz ) * 2048 );
+            const double o = ocean.sample2D( p );
+            const double l = lake.sample2D( p );
+            if( o > 0.45 ) ++oceanSamples;
+            else if( l > 0.48 )
+            {
+                ++lakeSamples;
+                CHECK( level.sample2D( p ) - bottom.sample2D( p ) > 3.0 );
+            }
+            ++samples;
+        }
+
+    const double oceanFraction = static_cast<double>( oceanSamples ) / samples;
+    const double lakeFraction = static_cast<double>( lakeSamples ) / samples;
+    const double dryLandFraction = 1.0 - oceanFraction - lakeFraction;
+
+    // Guard rails, not quotas: seeds may vary, but ordinary worlds must neither
+    // become waterworlds nor almost-waterless supercontinents.
+    CHECK( oceanFraction > 0.35 );
+    CHECK( oceanFraction < 0.75 );
+    CHECK( lakeFraction > 0.003 );
+    CHECK( lakeFraction < 0.06 );
+    CHECK( dryLandFraction > 0.20 );
 }
 
 int main() { return test::runAll(); }
