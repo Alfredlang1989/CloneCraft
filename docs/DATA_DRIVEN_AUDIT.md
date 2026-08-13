@@ -94,7 +94,7 @@ through JSON where required.
 ## Settings/UI ownership
 
 Persistent user settings are data-backed through
-`~/.config/Clonecraft/settings.json` (or `$XDG_CONFIG_HOME`). Current settings own:
+`~/.config/Omnigrid/settings.json` (or `$XDG_CONFIG_HOME`). Current settings own:
 
 - window width/height/fullscreen/resizable;
 - chunk render distance and per-update commit budget;

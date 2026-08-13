@@ -20,7 +20,7 @@ namespace
         worldgen::FieldConfig cfg;
         cfg.id = id;
         cfg.dimension = dimension;
-        cfg.scriptPath = std::filesystem::path( CLONECRAFT_DATA_DIR ) / "worldgen" / script;
+        cfg.scriptPath = std::filesystem::path( OMNIGRID_DATA_DIR ) / "worldgen" / script;
         cfg.functionName = "sample";
         cfg.salt = salt;
         return cfg;

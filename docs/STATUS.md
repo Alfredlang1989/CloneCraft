@@ -210,7 +210,7 @@ See `docs/CODE_REVIEW_V10.md` and `docs/STATIC_ANALYSIS.md`.
 - shadow-casting and non-shadow-casting block sections are separated into at
   most two Ogre ManualObjects per chunk;
 - water material uses explicit JSON transparency rather than duplicated colour alpha;
-- `CLONECRAFT_BUILD_APP=OFF` permits renderer-independent CI/core testing
+- `OMNIGRID_BUILD_APP=OFF` permits renderer-independent CI/core testing
   without requiring SDL3/OgreNext on the test host;
 - true screen-space refraction remains a dedicated-compositor follow-up; the
   current material path uses stable PBS transparency as fallback.
@@ -288,7 +288,7 @@ Passed:
 
 ```text
 TestCoordinates: default 16/16 configuration
-TestCoordinates: CLONECRAFT_CHUNK_EDGE=32, CLONECRAFT_GROUP_EDGE=32
+TestCoordinates: OMNIGRID_CHUNK_EDGE=32, OMNIGRID_GROUP_EDGE=32
 renderer-independent C++ syntax checks for coordinates/chunk/meshing/worldgen
 manual core validation: strict BlockId, streaming-rim culling, greedy UV/material id, negative terrain height, cubic radius-1 streaming
 JSON syntax validation for data/*.json

@@ -1,30 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${CLONECRAFT_REPO_URL:-git@github.com:Alfredlang1989/CloneCraft.git}"
-BRANCH="${CLONECRAFT_BRANCH:-main}"
+REPO_URL="${OMNIGRID_REPO_URL:-git@github.com:Alfredlang1989/OmniGrid.git}"
+BRANCH="${OMNIGRID_BRANCH:-main}"
 CMD="${1:-help}"
 
-say() { printf '[CloneCraft Git] %s\n' "$*"; }
+say() { printf '[OmniGrid Git] %s\n' "$*"; }
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'HELP'
-CloneCraft Git helper
+OmniGrid Git helper
 
-Einmalig, im vorhandenen CloneCraft-Quellordner:
-  ./clonecraft-git.sh bootstrap
+Einmalig, im vorhandenen OmniGrid-Quellordner:
+  ./omnigrid-git.sh bootstrap
 
 Neuen Rechner / frischen Checkout anlegen:
-  ./clonecraft-git.sh clone [zielordner]
+  ./omnigrid-git.sh clone [zielordner]
 
 Danach im Repository:
-  ./clonecraft-git.sh update
-  ./clonecraft-git.sh status
-  ./clonecraft-git.sh push "Commit-Nachricht"
+  ./omnigrid-git.sh update
+  ./omnigrid-git.sh status
+  ./omnigrid-git.sh push "Commit-Nachricht"
 
 Bedeutung:
-  bootstrap  Vorhandenen CloneCraft-Quellordner mit Alfredlang1989/CloneCraft
+  bootstrap  Vorhandenen OmniGrid-Quellordner mit Alfredlang1989/OmniGrid
              verbinden, alles committen und pushen. Bestehende Git-Historie
              wird erhalten.
   clone      Repository erstmalig herunterladen.
@@ -33,8 +33,8 @@ Bedeutung:
   push       Alle lokalen Änderungen committen und nach main pushen.
 
 Optionale Umgebungsvariablen:
-  CLONECRAFT_REPO_URL   anderes Remote verwenden
-  CLONECRAFT_BRANCH     anderer Branch (Standard: main)
+  OMNIGRID_REPO_URL   anderes Remote verwenden
+  OMNIGRID_BRANCH     anderer Branch (Standard: main)
 HELP
 }
 
@@ -66,7 +66,7 @@ case "$CMD" in
       # werden vorhandene lokale Änderungen zunächst bewusst als eigener Commit gesichert.
       git add -A
       if ! git diff --cached --quiet; then
-        git commit -m "Prepare CloneCraft GitHub bootstrap"
+        git commit -m "Prepare OmniGrid GitHub bootstrap"
       fi
 
       git branch -M "$BRANCH"
@@ -86,9 +86,9 @@ case "$CMD" in
       else
         # Typischer Erstimport: lokales altes Git und das neue GitHub-Bootstrap-Repo
         # haben keine gemeinsame Wurzel. 'ours' verbindet nur die Historien; der
-        # lokale CloneCraft-Dateibaum bleibt vollständig unverändert.
+        # lokale OmniGrid-Dateibaum bleibt vollständig unverändert.
         git merge --allow-unrelated-histories -s ours "origin/$BRANCH" \
-          -m "Attach CloneCraft GitHub repository"
+          -m "Attach OmniGrid GitHub repository"
       fi
     else
       say "Initialisiere Git im aktuellen Quellordner ..."
@@ -101,23 +101,23 @@ case "$CMD" in
       git fetch origin "$BRANCH"
       git reset --mixed "origin/$BRANCH"
 
-      say "Übernehme aktuellen CloneCraft-Quellbaum ..."
+      say "Übernehme aktuellen OmniGrid-Quellbaum ..."
       git add -A
       if git diff --cached --quiet; then
         say "Keine lokalen Dateien zu übernehmen."
       else
-        git commit -m "Import CloneCraft source tree"
+        git commit -m "Import OmniGrid source tree"
       fi
     fi
 
     say "Push nach origin/$BRANCH ..."
     git push -u origin "$BRANCH"
-    say "Fertig. Ab jetzt: ./clonecraft-git.sh update bzw. push"
+    say "Fertig. Ab jetzt: ./omnigrid-git.sh update bzw. push"
     ;;
 
   clone)
     require_git
-    TARGET="${2:-CloneCraft}"
+    TARGET="${2:-OmniGrid}"
     [[ ! -e "$TARGET" ]] || die "Ziel existiert bereits: $TARGET"
     say "Klone $REPO_URL nach $TARGET ..."
     git clone --branch "$BRANCH" "$REPO_URL" "$TARGET"
@@ -148,7 +148,7 @@ case "$CMD" in
     inside_repo || die "'push' muss innerhalb eines Git-Checkouts laufen."
     ensure_origin
     shift || true
-    MESSAGE="${*:-Update CloneCraft}"
+    MESSAGE="${*:-Update OmniGrid}"
     git add -A
     if git diff --cached --quiet; then
       say "Nichts zu committen."

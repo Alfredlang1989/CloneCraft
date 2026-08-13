@@ -18,7 +18,7 @@ namespace worldgen
     };
 
     /**
-     * v16-compatible OpenSimplex2S sampled from Clonecraft's hierarchical
+     * v16-compatible OpenSimplex2S sampled from Omnigrid's hierarchical
      * address space.
      *
      * The large address is mapped once per ChunkGroup into OpenSimplex's

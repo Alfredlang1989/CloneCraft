@@ -256,8 +256,8 @@ namespace config
     std::filesystem::path defaultSettingsPath()
     {
         if( const char *home = std::getenv( "HOME" ); home && *home )
-            return std::filesystem::path( home ) / ".config" / "Clonecraft" / "settings.json";
-        throw std::runtime_error( "cannot determine Clonecraft settings path: HOME is not set" );
+            return std::filesystem::path( home ) / ".config" / "Omnigrid" / "settings.json";
+        throw std::runtime_error( "cannot determine Omnigrid settings path: HOME is not set" );
     }
 
     void saveSettings( const std::filesystem::path &path, const Settings &settings )

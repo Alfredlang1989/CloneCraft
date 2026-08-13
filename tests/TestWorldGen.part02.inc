@@ -30,10 +30,10 @@ TEST_CASE(default_sugar_cane_is_decoration_on_final_river_bank_surface)
     world::BlockRegistry blocks;
     world::BiomeRegistry biomes;
     world::ResourceRegistry resources;
-    world::RegistryLoader::loadFromDirectory( CLONECRAFT_DATA_DIR, blocks, biomes, resources );
+    world::RegistryLoader::loadFromDirectory( OMNIGRID_DATA_DIR, blocks, biomes, resources );
     world::BlockIdTable table( blocks );
     const auto cfg = worldgen::loadWorldGenConfig(
-        std::filesystem::path( CLONECRAFT_DATA_DIR ) / "worldgen.json" );
+        std::filesystem::path( OMNIGRID_DATA_DIR ) / "worldgen.json" );
 
     const auto anchorIt = std::find_if( cfg.anchorSets.begin(), cfg.anchorSets.end(),
         []( const worldgen::AnchorSetConfig &anchor ) { return anchor.id == "river_reeds"; } );
@@ -79,7 +79,7 @@ TEST_CASE(decoration_anchor_lattice_does_not_repeat_between_sections)
     worldgen::FieldConfig height;
     height.id = "height";
     height.dimension = worldgen::FieldDimension::D2;
-    height.scriptPath = std::filesystem::path( CLONECRAFT_TEST_DATA_DIR ) / "constant_zero.lua";
+    height.scriptPath = std::filesystem::path( OMNIGRID_TEST_DATA_DIR ) / "constant_zero.lua";
     cfg.fields.push_back( height );
 
     worldgen::PassConfig stone;

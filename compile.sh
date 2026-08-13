@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Clonecraft build helper.
+# Omnigrid build helper.
 # IMPORTANT: This script NEVER installs or modifies OS packages.
 # It only inspects the current toolchain and builds inside the repository.
 
@@ -9,9 +9,9 @@ PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 
 BUILD_TYPE="Debug"
-CHUNK_EDGE="${CLONECRAFT_CHUNK_EDGE:-16}"
-GROUP_EDGE="${CLONECRAFT_GROUP_EDGE:-16}"
-JOBS="${CLONECRAFT_BUILD_JOBS:-}"
+CHUNK_EDGE="${OMNIGRID_CHUNK_EDGE:-16}"
+GROUP_EDGE="${OMNIGRID_GROUP_EDGE:-16}"
+JOBS="${OMNIGRID_BUILD_JOBS:-}"
 DO_TEST=1
 DO_RUN=0
 DO_CLEAN=0
@@ -24,7 +24,7 @@ BUILD_DIR=""
 
 usage() {
     cat <<'USAGE'
-Clonecraft compile helper
+Omnigrid compile helper
 
 Usage:
   ./compile.sh [options]
@@ -41,7 +41,7 @@ Options:
   --clean                  Remove selected build directory before configure
   --no-test                Do not run ctest after build
   --test                   Run tests after build (default)
-  --run                    Run ./clonecraft after successful build/tests
+  --run                    Run ./omnigrid after successful build/tests
   --verbose                Verbose compiler/build output
   --fingerprint            Print host/toolchain fingerprint and exit
   --analyze-only           Configure + architecture check + clang-tidy, then exit
@@ -55,9 +55,9 @@ Examples:
   ./compile.sh --debug --run
 
 Environment overrides:
-  CLONECRAFT_CHUNK_EDGE
-  CLONECRAFT_GROUP_EDGE
-  CLONECRAFT_BUILD_JOBS
+  OMNIGRID_CHUNK_EDGE
+  OMNIGRID_GROUP_EDGE
+  OMNIGRID_BUILD_JOBS
   CLANG_TIDY               Optional path/name override for clang-tidy
   CMAKE_PREFIX_PATH
   PKG_CONFIG_PATH
@@ -76,11 +76,11 @@ fatal() {
 }
 
 info() {
-    printf '[clonecraft] %s\n' "$*"
+    printf '[omnigrid] %s\n' "$*"
 }
 
 warn() {
-    printf '[clonecraft] WARNING: %s\n' "$*" >&2
+    printf '[omnigrid] WARNING: %s\n' "$*" >&2
 }
 
 need_command() {
@@ -321,8 +321,8 @@ cmake_args=(
     -B "$BUILD_DIR"
     -G "$GENERATOR"
     "-DCMAKE_BUILD_TYPE=$BUILD_TYPE"
-    "-DCLONECRAFT_CHUNK_EDGE=$CHUNK_EDGE"
-    "-DCLONECRAFT_GROUP_EDGE=$GROUP_EDGE"
+    "-DOMNIGRID_CHUNK_EDGE=$CHUNK_EDGE"
+    "-DOMNIGRID_GROUP_EDGE=$GROUP_EDGE"
 )
 
 if ! cmake "${cmake_args[@]}"; then
@@ -373,7 +373,7 @@ if (( DO_TEST )); then
     fi
 fi
 
-exe="$BUILD_DIR/clonecraft"
+exe="$BUILD_DIR/omnigrid"
 [[ -x "$exe" ]] || fatal "Build reported success but executable was not found: $exe"
 
 printf '\n'
@@ -386,6 +386,6 @@ else
 fi
 
 if (( DO_RUN )); then
-    info "Starting Clonecraft..."
+    info "Starting Omnigrid..."
     exec "$exe"
 fi

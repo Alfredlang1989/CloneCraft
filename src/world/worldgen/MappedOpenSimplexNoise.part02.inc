@@ -9,7 +9,7 @@
 
             auto step = [&]( std::int64_t radix, std::int64_t digit,
                              std::int64_t &quotientDigit ) {
-                const world::clonecraft_i128 current = static_cast<world::clonecraft_i128>( result.remainder ) * radix + digit;
+                const world::omnigrid_i128 current = static_cast<world::omnigrid_i128>( result.remainder ) * radix + digit;
                 quotientDigit = static_cast<std::int64_t>( current / divisor );
                 result.remainder = static_cast<std::int64_t>( current % divisor );
             };

@@ -1,6 +1,6 @@
 #pragma once
 
-// Minimal Lua 5.4 C-API declarations used by Clonecraft. Keeping this tiny
+// Minimal Lua 5.4 C-API declarations used by Omnigrid. Keeping this tiny
 // compatibility header in-tree means the engine only needs the Lua runtime
 // library at link/runtime; distro development headers are not required.
 // The ABI types below match the stock Lua 5.4 build used by mainstream 64-bit
@@ -15,7 +15,7 @@ extern "C"
     using lua_Number = double;
     using lua_Integer = std::int64_t;
     static_assert( sizeof( lua_Integer ) == 8,
-                   "Clonecraft worldgen requires 64-bit Lua integers" );
+                   "Omnigrid worldgen requires 64-bit Lua integers" );
     using lua_KContext = std::intptr_t;
     using lua_CFunction = int ( * )( lua_State * );
     using lua_KFunction = int ( * )( lua_State *, int, lua_KContext );

@@ -57,8 +57,8 @@ namespace worldgen
         {
             auto mulAddI64 = []( std::int64_t value, std::int64_t radix,
                                  std::int64_t digit, std::int64_t &out ) noexcept {
-                const world::clonecraft_i128 wide =
-                    static_cast<world::clonecraft_i128>( value ) * radix + digit;
+                const world::omnigrid_i128 wide =
+                    static_cast<world::omnigrid_i128>( value ) * radix + digit;
                 if( wide < std::numeric_limits<std::int64_t>::min() ||
                     wide > std::numeric_limits<std::int64_t>::max() )
                     return false;

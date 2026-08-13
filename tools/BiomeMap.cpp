@@ -200,7 +200,7 @@ namespace
             }
             else if( arg == "--help" )
             {
-                std::cout << "CloneCraft biome-map diagnostic renderer\n"
+                std::cout << "OmniGrid biome-map diagnostic renderer\n"
                           << "  --data DIR       data directory (default: data)\n"
                           << "  --output FILE    PNG output (default: biome_map.png)\n"
                           << "  --width N        pixels/chunks east-west (default: 1024)\n"

@@ -24,7 +24,7 @@ X/Y/Z are equal peers. There is no Minecraft-style fixed vertical chunk column
 or hard world floor/ceiling in the coordinate model.
 
 ## ADR-005 - Chunk/Group edge sizes are compile-time experiment knobs
-`CLONECRAFT_CHUNK_EDGE` and `CLONECRAFT_GROUP_EDGE` define the cubic edge sizes.
+`OMNIGRID_CHUNK_EDGE` and `OMNIGRID_GROUP_EDGE` define the cubic edge sizes.
 Algorithms must use the central constants and not hide literal 16/32 sizes.
 
 ## ADR-006 - ChunkGroups are sparse

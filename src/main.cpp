@@ -50,9 +50,9 @@ namespace
  *
  * Environment-driven smoke tests feed real SDL events into the queue
  * (identical pipeline to real keyboard/window-manager input):
- *   CLONECRAFT_SMOKE=esc     push ESC after 30 frames, expect clean exit
- *   CLONECRAFT_SMOKE=close   push window close request, expect clean exit
- *   CLONECRAFT_SMOKE=resize  push 900x600 resize, render a few more
+ *   OMNIGRID_SMOKE=esc     push ESC after 30 frames, expect clean exit
+ *   OMNIGRID_SMOKE=close   push window close request, expect clean exit
+ *   OMNIGRID_SMOKE=resize  push 900x600 resize, render a few more
  *                            frames, then clean exit (with -c N)
  */
 int main( int argc, char *argv[] )
@@ -80,7 +80,7 @@ int main( int argc, char *argv[] )
         }
         else if( arg == "--help" )
         {
-            core::logInfo( "Usage: clonecraft [-c N] [--help]" );
+            core::logInfo( "Usage: omnigrid [-c N] [--help]" );
             return 0;
         }
         else
@@ -89,7 +89,7 @@ int main( int argc, char *argv[] )
         }
     }
 
-    const char *smokeEnv = std::getenv( "CLONECRAFT_SMOKE" );
+    const char *smokeEnv = std::getenv( "OMNIGRID_SMOKE" );
     const std::string smoke = smokeEnv ? smokeEnv : "";
 
     app::Application application;
@@ -126,7 +126,7 @@ int main( int argc, char *argv[] )
                         core::logError( "Smoke test: SDL resize request failed" );
                 }
                 else
-                    core::logWarn( "CLONECRAFT_SMOKE mode ignored: " + smoke );
+                    core::logWarn( "OMNIGRID_SMOKE mode ignored: " + smoke );
                 eventPushed = true;
             }
 

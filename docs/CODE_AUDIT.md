@@ -73,7 +73,7 @@ architecture explicitly wants 16/32 experimentation.
 
 Fix:
 
-- CMake cache: `CLONECRAFT_CHUNK_EDGE` and `CLONECRAFT_GROUP_EDGE`;
+- CMake cache: `OMNIGRID_CHUNK_EDGE` and `OMNIGRID_GROUP_EDGE`;
 - central constants in `Coords.h`;
 - greedy temporary grids are dynamically sized from the configured edge;
 - coordinate tests were verified with both 16/16 and 32/32.
@@ -425,7 +425,7 @@ detection also passes all seven suites after the OpenSimplex repairs.
 Target log showed two renderer defects after all CPU tests had passed:
 
 1. Generated JSON-colour textures were bound by resource *name*. Ogre then asked
-   ResourceGroupManager for a file named `Clonecraft/Generated/...`, producing
+   ResourceGroupManager for a file named `Omnigrid/Generated/...`, producing
    FileNotFoundException messages. Generated textures are now `ManualTexture` and
    PBS binds the existing `TextureGpu*` directly.
 2. PBS HLMS was registered with a hand-written, incomplete library list. OgreNext

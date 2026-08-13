@@ -27,7 +27,7 @@ namespace platform
         if( resizable ) flags |= SDL_WINDOW_RESIZABLE;
         if( fullscreen ) flags |= SDL_WINDOW_FULLSCREEN;
 
-        mWindow = SDL_CreateWindow( "Clonecraft",
+        mWindow = SDL_CreateWindow( "Omnigrid",
                                     width > 0 ? width : INITIAL_WIDTH,
                                     height > 0 ? height : INITIAL_HEIGHT,
                                     flags );

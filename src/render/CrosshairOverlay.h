@@ -56,8 +56,8 @@ namespace render
         Ogre::TextureGpu *mTexture = nullptr;
 
         ui::CrosshairConfig mConfig;
-        std::string mMaterialName = "Clonecraft/CrosshairHlms";
-        std::string mTextureAlias = "Clonecraft/UI/Crosshair";
+        std::string mMaterialName = "Omnigrid/CrosshairHlms";
+        std::string mTextureAlias = "Omnigrid/UI/Crosshair";
         int mViewportWidth = 1;
         int mViewportHeight = 1;
     };

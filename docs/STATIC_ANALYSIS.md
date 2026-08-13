@@ -1,6 +1,6 @@
 # Static analysis and architecture gate
 
-Clonecraft now has two complementary repository-local analysis gates.
+Omnigrid now has two complementary repository-local analysis gates.
 
 ## 1. clang-tidy: established C++ AST / semantic analysis
 
@@ -26,7 +26,7 @@ reported and can be tightened after the initial warning baseline is known on the
 target toolchain.
 
 `.clang-tidy` uses clang-tidy's native YAML configuration format. This is build/tooling
-metadata only; Clonecraft runtime/content configuration remains JSON and no YAML parser
+metadata only; Omnigrid runtime/content configuration remains JSON and no YAML parser
 is added to the game.
 
 `clang-tidy` is not vendored and `compile.sh` never installs it. The local
@@ -43,7 +43,7 @@ configuration + architecture + static analysis without compiling. The
 `--no-static-analysis` switch exists only as an explicit emergency escape hatch;
 the architecture gate still runs.
 
-## 2. Clonecraft architecture checker
+## 2. Omnigrid architecture checker
 
 `tools/architecture_check.py` is a small deterministic include/dependency gate.
 Its rules are JSON in `tools/architecture_rules.json`.

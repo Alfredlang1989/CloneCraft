@@ -1,6 +1,6 @@
 # TARGET BUILD ENVIRONMENT
 
-This is the environment fingerprint observed from Alfred's real Clonecraft
+This is the environment fingerprint observed from Alfred's real Omnigrid
 build on 2026-08-08. It is the compatibility target for renderer integration.
 
 ```text
@@ -11,9 +11,9 @@ Generator      : Ninja
 pkg-config     : available (1.8.1 was reported by CMake)
 OgreNext       : 4.0.0unstable
 OgreNext-Hlms  : 4.0.0unstable
-nlohmann_json  : 3.11.3 (/usr/share/cmake/nlohmann_json/...) [host package observed; Clonecraft now uses bundled 3.12.0]
+nlohmann_json  : 3.11.3 (/usr/share/cmake/nlohmann_json/...) [host package observed; Omnigrid now uses bundled 3.12.0]
 SDL3           : exact version not present in the first build log
-Window backend : X11 integration used by Clonecraft
+Window backend : X11 integration used by Omnigrid
 ```
 
 `./compile.sh --fingerprint` prints the SDL3 version too when the local

@@ -35,7 +35,7 @@ namespace debug
         std::ostringstream out;
         out.setf( std::ios::fixed );
         out << std::setprecision( 2 );
-        out << "Clonecraft debug [F5]\n";
+        out << "Omnigrid debug [F5]\n";
         out << "FPS: " << s.latestFps << "  avg: " << s.averageFps
             << "  frame: " << s.latestFrameMs << " ms (avg " << s.averageFrameMs << ")\n";
         out << "Render XYZ:  " << s.renderLocalX << " / " << s.renderLocalY << " / " << s.renderLocalZ << '\n';

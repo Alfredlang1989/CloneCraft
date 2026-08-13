@@ -1,6 +1,6 @@
 # COORDINATES
 
-CloneCraft Phase 2 uses two deliberately separate coordinate domains.
+OmniGrid Phase 2 uses two deliberately separate coordinate domains.
 
 ## Persistent block world
 

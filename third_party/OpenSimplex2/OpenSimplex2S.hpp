@@ -181,14 +181,14 @@ public:
 
   /**
    * Evaluate directly in the transformed 2D lattice coordinates used by
-   * noise2(). Clonecraft uses this for precision-safe hierarchical phase
+   * noise2(). Omnigrid uses this for precision-safe hierarchical phase
    * mapping; callers must already have applied the standard 2D skew.
    */
   double noise2_Lattice(double xs, double ys);
 
   /**
    * Evaluate directly in the re-oriented BCC lattice coordinates used by
-   * noise3_XZBeforeY(). Clonecraft uses this for hierarchical phase mapping.
+   * noise3_XZBeforeY(). Omnigrid uses this for hierarchical phase mapping.
    */
   double noise3_BCC_Lattice(double xr, double yr, double zr);
 

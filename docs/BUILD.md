@@ -1,4 +1,4 @@
-# Building Clonecraft
+# Building Omnigrid
 
 The preferred entry point is the repository-local build helper:
 
@@ -73,7 +73,7 @@ the architecture dependency gate still runs. See `docs/STATIC_ANALYSIS.md`.
 
 ## Lua 5.4
 
-The data-driven worldgen runtime requires the Lua 5.4 runtime library. Clonecraft
+The data-driven worldgen runtime requires the Lua 5.4 runtime library. Omnigrid
 uses a small in-tree declaration of the Lua 5.4 C ABI (`LuaApi.h`), so normal
 Linux builds need the runtime library but do not depend on a distro-specific Lua
 header path. CMake searches for `lua5.4`, `lua54` or equivalent names and fails

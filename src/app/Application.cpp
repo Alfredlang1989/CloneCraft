@@ -158,7 +158,7 @@ namespace app
 
     std::string Application::buildDebugOverlayText() const
     {
-        if( !mRenderer || !mWorldGen ) return "Clonecraft debug: initializing...";
+        if( !mRenderer || !mWorldGen ) return "Omnigrid debug: initializing...";
         const world::WorldPosition position = cameraWorldPosition();
         const world::BlockAddress &block = position.blockAddress();
         const world::ChunkAddress &chunk = block.chunk;

@@ -1,6 +1,6 @@
 # DEBUG HUD
 
-Clonecraft has a lightweight Minecraft-style runtime diagnostic overlay rendered
+Omnigrid has a lightweight Minecraft-style runtime diagnostic overlay rendered
 through OgreNext's Overlay component.
 
 ## Toggle
@@ -64,12 +64,12 @@ The HUD uses `OGRE-Next-Overlay` plus HLMS Unlit. Ogre's Overlay Font path needs
 HLMS Unlit even though terrain itself uses HLMS PBS, so both HLMS implementations
 are registered by `OgreRenderer`.
 
-No font file is copied into Clonecraft. The renderer follows OgreNext's official
+No font file is copied into Omnigrid. The renderer follows OgreNext's official
 debug-resource layout first: `Media/2.0/scripts/materials/Common` plus
 `Media/packs/DebugPack.zip`, and uses the `DebugFont` declared there. If an
-installation does not ship that sample pack, Clonecraft exposes an already
+installation does not ship that sample pack, Omnigrid exposes an already
 installed system TTF through a dedicated Ogre resource group and creates
-`Clonecraft/DebugFont` from it. It never installs or copies a system font.
+`Omnigrid/DebugFont` from it. It never installs or copies a system font.
 
 The visual style is deliberately simple: white diagnostic text plus an offset
 black shadow, positioned at the top-left of the viewport.

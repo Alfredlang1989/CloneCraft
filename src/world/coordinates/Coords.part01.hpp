@@ -63,7 +63,7 @@
         {
             const std::int64_t quotient = floorDiv( carry, radix );
             const std::int64_t remainder = floorMod( carry, radix );
-            const clonecraft_i128 sum = static_cast<clonecraft_i128>( digit ) + remainder;
+            const omnigrid_i128 sum = static_cast<omnigrid_i128>( digit ) + remainder;
             digit = static_cast<std::int64_t>( sum % radix );
             const std::int64_t extra = static_cast<std::int64_t>( sum / radix );
             return tryAddI64( quotient, extra, carry );
@@ -73,7 +73,7 @@
         {
             std::int64_t carry = floorDiv( delta, BLOCKS_PER_CHUNK_EDGE );
             const std::int64_t remainder = floorMod( delta, BLOCKS_PER_CHUNK_EDGE );
-            const clonecraft_i128 blockSum = static_cast<clonecraft_i128>( base.block ) + remainder;
+            const omnigrid_i128 blockSum = static_cast<omnigrid_i128>( base.block ) + remainder;
             base.block = static_cast<std::int64_t>( blockSum % BLOCKS_PER_CHUNK_EDGE );
             if( !tryAddI64( carry,
                             static_cast<std::int64_t>( blockSum / BLOCKS_PER_CHUNK_EDGE ),
@@ -95,7 +95,7 @@
             base.block = 0;
             std::int64_t carry = floorDiv( delta, CHUNKS_PER_GROUP_EDGE );
             const std::int64_t remainder = floorMod( delta, CHUNKS_PER_GROUP_EDGE );
-            const clonecraft_i128 chunkSum = static_cast<clonecraft_i128>( base.chunk ) + remainder;
+            const omnigrid_i128 chunkSum = static_cast<omnigrid_i128>( base.chunk ) + remainder;
             base.chunk = static_cast<std::int64_t>( chunkSum % CHUNKS_PER_GROUP_EDGE );
             if( !tryAddI64( carry,
                             static_cast<std::int64_t>( chunkSum / CHUNKS_PER_GROUP_EDGE ),
@@ -117,7 +117,7 @@
             base.chunk = 0;
             std::int64_t carry = floorDiv( delta, GROUPS_PER_SECTION_EDGE );
             const std::int64_t remainder = floorMod( delta, GROUPS_PER_SECTION_EDGE );
-            const clonecraft_i128 groupSum = static_cast<clonecraft_i128>( base.group ) + remainder;
+            const omnigrid_i128 groupSum = static_cast<omnigrid_i128>( base.group ) + remainder;
             base.group = static_cast<std::int64_t>( groupSum % GROUPS_PER_SECTION_EDGE );
             if( !tryAddI64( carry,
                             static_cast<std::int64_t>( groupSum / GROUPS_PER_SECTION_EDGE ),

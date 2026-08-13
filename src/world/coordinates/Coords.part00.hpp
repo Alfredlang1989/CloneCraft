@@ -10,37 +10,37 @@
 namespace world
 {
 #if defined(__SIZEOF_INT128__)
-    __extension__ typedef __int128 clonecraft_i128;
+    __extension__ typedef __int128 omnigrid_i128;
 #else
-#error "Clonecraft hierarchical phase-2 coordinates require compiler support for 128-bit integers"
+#error "Omnigrid hierarchical phase-2 coordinates require compiler support for 128-bit integers"
 #endif
-#ifndef CLONECRAFT_CHUNK_EDGE
-#define CLONECRAFT_CHUNK_EDGE 16
+#ifndef OMNIGRID_CHUNK_EDGE
+#define OMNIGRID_CHUNK_EDGE 16
 #endif
-#ifndef CLONECRAFT_GROUP_EDGE
-#define CLONECRAFT_GROUP_EDGE 16
+#ifndef OMNIGRID_GROUP_EDGE
+#define OMNIGRID_GROUP_EDGE 16
 #endif
-#ifndef CLONECRAFT_SECTION_EDGE
-#define CLONECRAFT_SECTION_EDGE 256
+#ifndef OMNIGRID_SECTION_EDGE
+#define OMNIGRID_SECTION_EDGE 256
 #endif
-#ifndef CLONECRAFT_REGION_EDGE
-#define CLONECRAFT_REGION_EDGE 9000000000000000000LL
+#ifndef OMNIGRID_REGION_EDGE
+#define OMNIGRID_REGION_EDGE 9000000000000000000LL
 #endif
-#ifndef CLONECRAFT_SECTOR_EDGE
-#define CLONECRAFT_SECTOR_EDGE 9000000000000000000LL
+#ifndef OMNIGRID_SECTOR_EDGE
+#define OMNIGRID_SECTOR_EDGE 9000000000000000000LL
 #endif
 
     // Physical storage radices. These remain small because a Chunk and ChunkGroup
     // are materialized containers.
-    inline constexpr std::int64_t BLOCKS_PER_CHUNK_EDGE = CLONECRAFT_CHUNK_EDGE;
-    inline constexpr std::int64_t CHUNKS_PER_GROUP_EDGE = CLONECRAFT_GROUP_EDGE;
+    inline constexpr std::int64_t BLOCKS_PER_CHUNK_EDGE = OMNIGRID_CHUNK_EDGE;
+    inline constexpr std::int64_t CHUNKS_PER_GROUP_EDGE = OMNIGRID_GROUP_EDGE;
 
     // Phase 2 logical address radices. A Section is the locality tier between
     // physical ChunkGroups and the astronomically large logical super-levels.
     // No Section/Region/Sector container is materialized from these radices.
-    inline constexpr std::int64_t GROUPS_PER_SECTION_EDGE = CLONECRAFT_SECTION_EDGE;
-    inline constexpr std::int64_t SECTIONS_PER_REGION_EDGE = CLONECRAFT_REGION_EDGE;
-    inline constexpr std::int64_t REGIONS_PER_SECTOR_EDGE = CLONECRAFT_SECTOR_EDGE;
+    inline constexpr std::int64_t GROUPS_PER_SECTION_EDGE = OMNIGRID_SECTION_EDGE;
+    inline constexpr std::int64_t SECTIONS_PER_REGION_EDGE = OMNIGRID_REGION_EDGE;
+    inline constexpr std::int64_t REGIONS_PER_SECTOR_EDGE = OMNIGRID_SECTOR_EDGE;
 
     inline constexpr std::int64_t BLOCKS_PER_GROUP_EDGE =
         BLOCKS_PER_CHUNK_EDGE * CHUNKS_PER_GROUP_EDGE;

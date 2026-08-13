@@ -1,6 +1,6 @@
 # nlohmann/json
 
-Clonecraft vendors the header-only `nlohmann/json` single-header distribution so
+Omnigrid vendors the header-only `nlohmann/json` single-header distribution so
 JSON parsing does not depend on a distro package.
 
 - Version: 3.12.0

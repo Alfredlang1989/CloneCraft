@@ -8,11 +8,11 @@
             if( maxAbs < 0 ) return false;
             if( position == origin ) { out = 0; return true; }
 
-            clonecraft_i128 lo = -static_cast<clonecraft_i128>( maxAbs );
-            clonecraft_i128 hi = static_cast<clonecraft_i128>( maxAbs );
+            omnigrid_i128 lo = -static_cast<omnigrid_i128>( maxAbs );
+            omnigrid_i128 hi = static_cast<omnigrid_i128>( maxAbs );
             while( lo <= hi )
             {
-                const clonecraft_i128 midWide = lo + ( hi - lo ) / 2;
+                const omnigrid_i128 midWide = lo + ( hi - lo ) / 2;
                 const std::int64_t mid = static_cast<std::int64_t>( midWide );
                 AxisAddress candidate{};
                 if( !offsetFn( origin, mid, candidate ) )
@@ -34,12 +34,12 @@
             if( position.sector == origin.sector && position.region == origin.region &&
                 position.section == origin.section && position.group == origin.group )
             {
-                const clonecraft_i128 delta =
-                    ( static_cast<clonecraft_i128>( position.chunk - origin.chunk ) *
+                const omnigrid_i128 delta =
+                    ( static_cast<omnigrid_i128>( position.chunk - origin.chunk ) *
                       BLOCKS_PER_CHUNK_EDGE ) +
                     ( position.block - origin.block );
-                if( delta >= -static_cast<clonecraft_i128>( maxAbs ) &&
-                    delta <= static_cast<clonecraft_i128>( maxAbs ) )
+                if( delta >= -static_cast<omnigrid_i128>( maxAbs ) &&
+                    delta <= static_cast<omnigrid_i128>( maxAbs ) )
                 {
                     out = static_cast<std::int64_t>( delta );
                     return true;

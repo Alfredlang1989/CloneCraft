@@ -66,7 +66,7 @@ PBR properties are loaded from `data/blocks.json`; there is no hardcoded per-blo
 
 ## Transparency and refraction
 
-PBS transparency is active. Clonecraft JSON uses `transparency=0` for opaque and `1` for fully transparent; Ogre PBS uses the inverse opacity convention, so the renderer converts it explicitly.
+PBS transparency is active. Omnigrid JSON uses `transparency=0` for opaque and `1` for fully transparent; Ogre PBS uses the inverse opacity convention, so the renderer converts it explicitly.
 
 True Ogre screen-space refraction requires its own compositor pass. Refraction/IOR are already represented in the registry/material model, but the current workspace intentionally uses transparent PBS fallback until that dedicated pass exists. See `docs/MATERIALS.md`.
 

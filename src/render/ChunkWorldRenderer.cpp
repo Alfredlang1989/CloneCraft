@@ -42,8 +42,8 @@ namespace render
 {
     namespace
     {
-        constexpr const char *MATERIAL_PREFIX = "Clonecraft/Block/";
-        constexpr const char *GENERATED_TEXTURE_PREFIX = "Clonecraft/Generated/";
+        constexpr const char *MATERIAL_PREFIX = "Omnigrid/Block/";
+        constexpr const char *GENERATED_TEXTURE_PREFIX = "Omnigrid/Generated/";
         constexpr const char *RESOURCE_GROUP = "General";
         constexpr std::uint32_t GENERATED_TEXTURE_SIZE = 16u;
 
@@ -235,7 +235,7 @@ namespace render
                 ? Ogre::CommonTextureTypes::EnvMap
                 : ( srgb ? Ogre::CommonTextureTypes::Diffuse
                          : Ogre::CommonTextureTypes::NormalMap );
-            const std::string aliasName = std::string( "Clonecraft/File/" ) +
+            const std::string aliasName = std::string( "Omnigrid/File/" ) +
                                           safeResourceName( def.id ) + "/" +
                                           safeResourceName( role );
             Ogre::TextureGpu *texture = textureMgr->createOrRetrieveTexture(
@@ -451,7 +451,7 @@ namespace render
         }
         else if( def.alphaMode == world::BlockAlphaMode::Blend )
         {
-            // Clonecraft JSON: 0 = opaque, 1 = fully transparent.
+            // Omnigrid JSON: 0 = opaque, 1 = fully transparent.
             // Ogre PBS: 0 = fully transparent, 1 = fully opaque.
             const float opacity = std::clamp( 1.0f - def.transparency, 0.0f, 1.0f );
             datablock->setTransparency( opacity, Ogre::HlmsPbsDatablock::Transparent,

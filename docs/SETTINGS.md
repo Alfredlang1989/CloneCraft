@@ -1,10 +1,10 @@
-# Clonecraft settings
+# Omnigrid settings
 
-Clonecraft keeps user/runtime settings separate from shipped game data.
+Omnigrid keeps user/runtime settings separate from shipped game data.
 
-On Linux the settings file is stored exactly at `$HOME/.config/Clonecraft/settings.json` (normally `~/.config/Clonecraft/settings.json`).
+On Linux the settings file is stored exactly at `$HOME/.config/Omnigrid/settings.json` (normally `~/.config/Omnigrid/settings.json`).
 
-If the file does not exist, Clonecraft creates the directory and writes a complete default settings file atomically before continuing startup.
+If the file does not exist, Omnigrid creates the directory and writes a complete default settings file atomically before continuing startup.
 
 ## Schema version 1
 

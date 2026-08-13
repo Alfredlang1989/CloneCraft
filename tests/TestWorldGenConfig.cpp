@@ -31,7 +31,7 @@ namespace
     TEST_CASE( worldgen_config_loads_fields_and_generic_passes )
     {
         const auto path = writeTempConfig(
-            "clonecraft-worldgen-test.json",
+            "omnigrid-worldgen-test.json",
             R"({
                 "seed": 42,
                 "workerThreads": 6,
@@ -100,7 +100,7 @@ namespace
     TEST_CASE( worldgen_config_rejects_unknown_fields )
     {
         const auto path = writeTempConfig(
-            "clonecraft-worldgen-bad.json",
+            "omnigrid-worldgen-bad.json",
             R"({ "seed":1, "definitelyNotASetting":true, "fields":[], "passes":[] })" );
         bool threw = false;
         try { (void)worldgen::loadWorldGenConfig( path ); }
@@ -115,7 +115,7 @@ namespace
     TEST_CASE( worldgen_config_rejects_unknown_pass_field_reference )
     {
         const auto path = writeTempConfig(
-            "clonecraft-worldgen-missing-field.json",
+            "omnigrid-worldgen-missing-field.json",
             R"({
                 "surfaceField":"height",
                 "fields":[{"id":"height","dimension":"2d","script":"height.lua"}],
@@ -133,7 +133,7 @@ namespace
     TEST_CASE( worldgen_config_loads_mod_defined_stage_without_engine_changes )
     {
         const auto path = writeTempConfig(
-            "clonecraft-worldgen-custom-stage.json",
+            "omnigrid-worldgen-custom-stage.json",
             R"({
                 "surfaceField":"height",
                 "fields":[{"id":"height","dimension":"2d","script":"height.lua"}],
@@ -159,7 +159,7 @@ namespace
     TEST_CASE( worldgen_config_rejects_unknown_pass_stage )
     {
         const auto path = writeTempConfig(
-            "clonecraft-worldgen-bad-stage.json",
+            "omnigrid-worldgen-bad-stage.json",
             R"({
                 "surfaceField":"height",
                 "fields":[{"id":"height","dimension":"2d","script":"height.lua"}],

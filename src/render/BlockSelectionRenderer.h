@@ -41,7 +41,7 @@ namespace render
         Ogre::Root *mRoot = nullptr;
         Ogre::SceneManager *mSceneManager = nullptr;
         ui::BlockSelectionConfig mConfig;
-        std::string mMaterialName = "Clonecraft/SelectionOutline";
+        std::string mMaterialName = "Omnigrid/SelectionOutline";
         Ogre::HlmsUnlitDatablock *mDatablock = nullptr;
         Ogre::ManualObject *mManual = nullptr;
         Ogre::SceneNode *mNode = nullptr;

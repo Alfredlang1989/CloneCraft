@@ -9,7 +9,7 @@ present.
 A full CMake configure was attempted with:
 
 ```text
-cmake -S . -B /mnt/data/clonecraft_cmake_check -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B /mnt/data/omnigrid_cmake_check -G Ninja -DCMAKE_BUILD_TYPE=Debug
 ```
 
 It stopped at `find_package(SDL3 3.0 REQUIRED)` because this execution

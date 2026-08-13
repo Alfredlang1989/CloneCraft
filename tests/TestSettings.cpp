@@ -10,7 +10,7 @@ namespace
 {
     std::filesystem::path freshPath( const char *name )
     {
-        const auto root = std::filesystem::temp_directory_path() / "clonecraft-settings-tests";
+        const auto root = std::filesystem::temp_directory_path() / "omnigrid-settings-tests";
         std::error_code ignored;
         std::filesystem::remove_all( root, ignored );
         return root / name / "settings.json";
@@ -23,11 +23,11 @@ TEST_CASE(settings_default_linux_path_uses_home_dot_config)
     const char *oldHome = std::getenv( "HOME" );
     const std::string savedHome = oldHome ? oldHome : "";
     const bool hadHome = oldHome != nullptr;
-    setenv( "HOME", "/tmp/clonecraft-home-probe", 1 );
+    setenv( "HOME", "/tmp/omnigrid-home-probe", 1 );
     const auto path = config::defaultSettingsPath();
     if( hadHome ) setenv( "HOME", savedHome.c_str(), 1 );
     else unsetenv( "HOME" );
-    CHECK( path == std::filesystem::path( "/tmp/clonecraft-home-probe/.config/Clonecraft/settings.json" ) );
+    CHECK( path == std::filesystem::path( "/tmp/omnigrid-home-probe/.config/Omnigrid/settings.json" ) );
 }
 
 TEST_CASE(settings_missing_file_is_created_with_defaults)

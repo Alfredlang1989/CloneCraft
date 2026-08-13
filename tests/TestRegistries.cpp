@@ -10,8 +10,8 @@
 
 using namespace world;
 
-#ifndef CLONECRAFT_DATA_DIR
-#define CLONECRAFT_DATA_DIR "data"
+#ifndef OMNIGRID_DATA_DIR
+#define OMNIGRID_DATA_DIR "data"
 #endif
 
 namespace
@@ -45,7 +45,7 @@ namespace
 
     TEST_CASE( blocks_core_data_valid )
     {
-        const std::filesystem::path dataDir( CLONECRAFT_DATA_DIR );
+        const std::filesystem::path dataDir( OMNIGRID_DATA_DIR );
         BlockRegistry blocks;
         BiomeRegistry biomes;
         ResourceRegistry resources;

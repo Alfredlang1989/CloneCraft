@@ -1,6 +1,6 @@
 # World generation runtime
 
-Clonecraft world generation is data-driven. `WorldGen` is an execution runtime;
+Omnigrid world generation is data-driven. `WorldGen` is an execution runtime;
 it does not contain material rules such as "stone below the heightmap", "dirt at
 the surface" or "caves remove terrain".
 

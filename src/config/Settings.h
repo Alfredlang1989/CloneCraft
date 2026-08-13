@@ -49,7 +49,7 @@ namespace config
     {
         std::string renderSystem = "OpenGL 3+ Rendering Subsystem";
         std::string renderSystemPlugin = "RenderSystem_GL3Plus";
-        std::string logFile = "clonecraft.log";
+        std::string logFile = "omnigrid.log";
         std::map<std::string, std::string> configOptions{
             { "sRGB Gamma Conversion", "Yes" }
         };
@@ -69,7 +69,7 @@ namespace config
         OgreSettings ogre;
     };
 
-    /** Linux path: $HOME/.config/Clonecraft/settings.json. */
+    /** Linux path: $HOME/.config/Omnigrid/settings.json. */
     std::filesystem::path defaultSettingsPath();
 
     /** Loads settings from path, creating parent directories + a default file when absent. */

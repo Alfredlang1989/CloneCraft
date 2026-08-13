@@ -378,7 +378,7 @@ std::int64_t OpenSimplex2S::fastFloor(double x)
 
   // Converting an out-of-range floating-point value to int64_t is undefined
   // in C++. Reject impossible lattice coordinates instead of corrupting a
-  // lookup index. Normal Clonecraft worldgen scales stay well inside this
+  // lookup index. Normal Omnigrid worldgen scales stay well inside this
   // range even at the representable BlockCoord limits.
   constexpr double kInt64Lower = -9223372036854775808.0; // -2^63
   constexpr double kInt64UpperExclusive = 9223372036854775808.0; // 2^63

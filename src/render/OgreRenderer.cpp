@@ -41,8 +41,8 @@ namespace render
 {
     namespace
     {
-        constexpr const char *COMPOSITOR_DEF_NAME = "ClonecraftDaylightWorkspace";
-        constexpr const char *SHADOW_NODE_NAME = "ClonecraftSunShadowNode";
+        constexpr const char *COMPOSITOR_DEF_NAME = "OmnigridDaylightWorkspace";
+        constexpr const char *SHADOW_NODE_NAME = "OmnigridSunShadowNode";
 
         // Bright Minecraft-like overworld daylight sky (#78A7FF). This is the
         // compositor clear colour for now; a later atmosphere/sky system can
@@ -65,7 +65,7 @@ namespace render
         constexpr float FLASHLIGHT_INNER_DEG = 22.0f;
         constexpr float FLASHLIGHT_OUTER_DEG = 52.0f;
 
-        constexpr const char *DEBUG_RESOURCE_GROUP = "ClonecraftDebug";
+        constexpr const char *DEBUG_RESOURCE_GROUP = "OmnigridDebug";
 
         /**
          * Register Ogre's official sample/debug resources without assuming they
@@ -289,7 +289,7 @@ namespace render
         try
         {
             // OgreNext 3.x/4.x strongly recommends the ABI cookie. It catches
-            // mismatches between the headers used to build Clonecraft and the
+            // mismatches between the headers used to build Omnigrid and the
             // installed OgreNext libraries/plugins before they turn into much
             // stranger runtime corruption.
             const Ogre::AbiCookie abiCookie = Ogre::generateAbiCookie();
@@ -297,7 +297,7 @@ namespace render
                                     /*pluginFileName*/ "",
                                     /*configFileName*/ "",
                                     /*logFileName*/ mOgreConfig.logFile,
-                                    /*appName*/ "Clonecraft" );
+                                    /*appName*/ "Omnigrid" );
         }
         catch( const Ogre::Exception &e )
         {
@@ -374,7 +374,7 @@ namespace render
         {
             mRoot->initialise( /*autoCreateWindow*/ false );
 
-            mWindow = mRoot->createRenderWindow( "ClonecraftMainWindow",
+            mWindow = mRoot->createRenderWindow( "OmnigridMainWindow",
                                                   nativeInfo.widthPx,
                                                   nativeInfo.heightPx,
                                                   /*fullScreen*/ false,

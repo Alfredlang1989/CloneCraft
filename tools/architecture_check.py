@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hard architecture gate for Clonecraft project-local includes.
+"""Hard architecture gate for Omnigrid project-local includes.
 
 This complements clang-tidy: clang-tidy analyzes C++ AST/semantics, while this
 script enforces module dependency direction and reports include cycles. Rules
@@ -181,7 +181,7 @@ def main() -> int:
     if file_cycle:
         errors.append("project include cycle: " + " -> ".join(file_cycle))
 
-    report_lines = ["Clonecraft architecture report", "", "Modules / source LOC:"]
+    report_lines = ["Omnigrid architecture report", "", "Modules / source LOC:"]
     for name in sorted(loc_by_module):
         report_lines.append(f"  {name:18s} {loc_by_module[name]:6d}")
     report_lines += ["", "Large translation units (refactor warning only):"]

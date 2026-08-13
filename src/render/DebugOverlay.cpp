@@ -20,10 +20,10 @@
 
 namespace
 {
-    constexpr const char *DEBUG_FONT_NAME = "Clonecraft/DebugFont";
+    constexpr const char *DEBUG_FONT_NAME = "Omnigrid/DebugFont";
     constexpr const char *OGRE_SAMPLE_DEBUG_FONT = "DebugFont";
-    constexpr const char *DEBUG_RESOURCE_GROUP = "ClonecraftDebug";
-    constexpr const char *SYSTEM_FONT_GROUP = "ClonecraftSystemFont";
+    constexpr const char *DEBUG_RESOURCE_GROUP = "OmnigridDebug";
+    constexpr const char *SYSTEM_FONT_GROUP = "OmnigridSystemFont";
 
     bool fontExists( const char *name )
     {
@@ -179,8 +179,8 @@ namespace
     Ogre::ColourValue parseHudColour( const std::string &value )
     {
         const float alpha = value.size() == 9u ? hexByte( value, 7u ) : 1.0f;
-        return { hexByte( value, 1u ), hexByte( value, 3u ),
-                 hexByte( value, 5u ), alpha };
+        return Ogre::ColourValue( hexByte( value, 1u ), hexByte( value, 3u ),
+                                  hexByte( value, 5u ), alpha );
     }
 } // namespace
 
@@ -199,11 +199,11 @@ namespace render
             core::logInfo( "Debug HUD init: creating Ogre overlay elements" );
             Ogre::v1::OverlayManager &manager = Ogre::v1::OverlayManager::getSingleton();
 
-            mOverlay = manager.create( "Clonecraft/DebugOverlay" );
+            mOverlay = manager.create( "Omnigrid/DebugOverlay" );
             mPanel = static_cast<Ogre::v1::OverlayContainer *>(
-                manager.createOverlayElement( "Panel", "Clonecraft/DebugPanel" ) );
+                manager.createOverlayElement( "Panel", "Omnigrid/DebugPanel" ) );
             mText = static_cast<Ogre::v1::TextAreaOverlayElement *>(
-                manager.createOverlayElement( "TextArea", "Clonecraft/DebugText" ) );
+                manager.createOverlayElement( "TextArea", "Omnigrid/DebugText" ) );
             mText->setFontName( fontName );
             mText->setColour( parseHudColour( settings.color ) );
             mText->setPosition( 0.008f, 0.010f );

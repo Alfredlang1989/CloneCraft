@@ -32,7 +32,7 @@ namespace render
 {
     namespace
     {
-        constexpr const char *UI_RESOURCE_GROUP = "ClonecraftUI";
+        constexpr const char *UI_RESOURCE_GROUP = "OmnigridUI";
         // OgreNext default queue modes: 200-224 are FAST (v2), while 225-255 are
         // V1_FAST. ManualObject is a v2 renderable, so it must stay in a FAST queue.
         constexpr Ogre::uint8 CROSSHAIR_RENDER_QUEUE = 224u;

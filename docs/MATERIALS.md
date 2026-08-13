@@ -53,7 +53,7 @@ Fields:
 | `reflectionMap` | optional | cubemap/environment reflection texture, e.g. cubemap DDS |
 | `alphaMode` | `opaque` / `mask` / `blend`, default inferred for legacy data | `mask` uses alpha-test cutout; `blend` uses PBS transparency |
 | `alphaCutoff` | `0..1`, default `0.5` | cutout threshold used by `alphaMode: mask` |
-| `transparency` | `0..1`, default `0` | Clonecraft convention for `blend`: `0` opaque, `1` fully transparent |
+| `transparency` | `0..1`, default `0` | Omnigrid convention for `blend`: `0` opaque, `1` fully transparent |
 | `refraction` | `0..1`, default `0` | requested screen-space refraction strength |
 | `indexOfRefraction` | `1..3`, default `1.45` | optical IOR metadata / Fresnel basis |
 | `receiveShadows` | bool, default `true` | material receives sun shadows |
@@ -81,7 +81,7 @@ A dedicated refractive compositor pass is therefore a separate renderer mileston
 
 ## Colour space / PBS albedo
 
-Clonecraft treats JSON hex colours and diffuse texture files as sRGB authoring data.
+Omnigrid treats JSON hex colours and diffuse texture files as sRGB authoring data.
 The renderer converts JSON solid colours to linear RGB before passing them to
 `HlmsPbsDatablock::setBackgroundDiffuse`; diffuse textures are loaded with
 `PrefersLoadingFromFileAsSRGB`. The Ogre render window has `sRGB Gamma Conversion=Yes`

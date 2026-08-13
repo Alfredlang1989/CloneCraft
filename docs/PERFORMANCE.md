@@ -32,8 +32,8 @@ Debian 13
 GCC 14.2
 C++20
 -O3 -DNDEBUG -march=native
-CLONECRAFT_CHUNK_EDGE=16
-CLONECRAFT_GROUP_EDGE=16
+OMNIGRID_CHUNK_EDGE=16
+OMNIGRID_GROUP_EDGE=16
 same world seed/data for before and after
 ```
 

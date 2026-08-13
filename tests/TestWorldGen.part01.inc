@@ -1,7 +1,7 @@
-    world::RegistryLoader::loadFromDirectory( CLONECRAFT_DATA_DIR, blocks, biomes, resources );
+    world::RegistryLoader::loadFromDirectory( OMNIGRID_DATA_DIR, blocks, biomes, resources );
     world::BlockIdTable table( blocks );
     auto cfg = worldgen::loadWorldGenConfig(
-        std::filesystem::path( CLONECRAFT_DATA_DIR ) / "worldgen.json" );
+        std::filesystem::path( OMNIGRID_DATA_DIR ) / "worldgen.json" );
     worldgen::WorldGen gen( cfg, blocks, table, biomes );
 
     const auto blockAtGlobal = [&]( std::int64_t x, std::int64_t y, std::int64_t z ) {
@@ -59,7 +59,7 @@
 TEST_CASE(default_river_uses_continuous_profile_and_sealing_passes)
 {
     const auto cfg = worldgen::loadWorldGenConfig(
-        std::filesystem::path( CLONECRAFT_DATA_DIR ) / "worldgen.json" );
+        std::filesystem::path( OMNIGRID_DATA_DIR ) / "worldgen.json" );
 
     const auto findPass = [&]( const std::string &id ) -> const worldgen::PassConfig * {
         const auto it = std::find_if( cfg.passes.begin(), cfg.passes.end(),
@@ -165,7 +165,7 @@ TEST_CASE(data_defined_stage_barrier_orders_custom_stages_before_addon)
     worldgen::FieldConfig height;
     height.id = "height";
     height.dimension = worldgen::FieldDimension::D2;
-    height.scriptPath = std::filesystem::path( CLONECRAFT_TEST_DATA_DIR ) / "constant_height_10.lua";
+    height.scriptPath = std::filesystem::path( OMNIGRID_TEST_DATA_DIR ) / "constant_height_10.lua";
     cfg.fields.push_back( height );
 
     worldgen::PassConfig terrain;

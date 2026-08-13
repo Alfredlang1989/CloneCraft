@@ -52,12 +52,12 @@ TEST_CASE(surface_layer_bottom_field_carves_only_down_to_explicit_floor)
     worldgen::FieldConfig height;
     height.id = "height";
     height.dimension = worldgen::FieldDimension::D2;
-    height.scriptPath = std::filesystem::path( CLONECRAFT_TEST_DATA_DIR ) / "constant_height_10.lua";
+    height.scriptPath = std::filesystem::path( OMNIGRID_TEST_DATA_DIR ) / "constant_height_10.lua";
     cfg.fields.push_back( height );
 
     worldgen::FieldConfig floor = height;
     floor.id = "floor";
-    floor.scriptPath = std::filesystem::path( CLONECRAFT_TEST_DATA_DIR ) / "constant_zero.lua";
+    floor.scriptPath = std::filesystem::path( OMNIGRID_TEST_DATA_DIR ) / "constant_zero.lua";
     cfg.fields.push_back( floor );
 
     worldgen::FieldConfig mask = floor;
@@ -152,10 +152,10 @@ TEST_CASE(default_biome_terrain_has_lowlands_and_real_mountains)
     world::BlockRegistry blocks;
     world::BiomeRegistry biomes;
     world::ResourceRegistry resources;
-    world::RegistryLoader::loadFromDirectory( CLONECRAFT_DATA_DIR, blocks, biomes, resources );
+    world::RegistryLoader::loadFromDirectory( OMNIGRID_DATA_DIR, blocks, biomes, resources );
     world::BlockIdTable table( blocks );
     const auto cfg = worldgen::loadWorldGenConfig(
-        std::filesystem::path( CLONECRAFT_DATA_DIR ) / "worldgen.json" );
+        std::filesystem::path( OMNIGRID_DATA_DIR ) / "worldgen.json" );
     worldgen::WorldGen gen( cfg, blocks, table, biomes );
 
     std::vector<std::int64_t> heights;

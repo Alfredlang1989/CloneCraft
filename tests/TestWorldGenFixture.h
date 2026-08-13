@@ -24,7 +24,7 @@ namespace testfixture
         c.stages.push_back( worldgen::StageConfig{ "addon", 1 } );
         worldgen::FieldConfig height;
         height.id="height"; height.dimension=worldgen::FieldDimension::D2;
-        height.scriptPath=std::filesystem::path(CLONECRAFT_TEST_DATA_DIR)/"simple_height.lua";
+        height.scriptPath=std::filesystem::path(OMNIGRID_TEST_DATA_DIR)/"simple_height.lua";
         height.functionName="sample"; height.salt=1;
         c.fields.push_back(height);
         worldgen::PassConfig stone;
