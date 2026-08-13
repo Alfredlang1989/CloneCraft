@@ -11,14 +11,19 @@
   source comments) but has not been committed. It is foreign working-tree work
   and is not part of the M00 commit. Persistent technical ids (block ids,
   mod namespaces, save/protocol identities) remain untouched.
-- M02 — Worldgen baseline (#8): **next**. Broaden desert climate distribution,
-  define `BiomeDef::weight` semantics, add determinism/statistics tests for
-  seed 1337 plus at least one additional seed.
+- M02 — Worldgen baseline (#8): **done** (commit pending). Desert climate
+  distribution broadened with a shaped hot*dry response (selection bands and
+  fades, no pure threshold lowering); `BiomeDef::weight` semantics defined and
+  proven as a relative competition multiplier; determinism, statistics,
+  hierarchy/boundary and normalization tests added for seed 1337 and seed 4242
+  (`tests/TestBiomeDistribution.cpp`, 6 cases); `docs/WORLDGEN.md` documents
+  the competition math and the frozen distribution baseline.
 - Core spine #3 (contracts/sidecars/world state/actions/events/enTT/RocksDB),
   #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
   #16/#17 (construction): **not started**.
 - Baseline gates at M00 time: architecture check PASS, clang-tidy/AST PASS,
-  15/15 renderer-independent ctest suites PASS.
+  15/15 renderer-independent ctest suites PASS. At M02 time the same gates PASS
+  with 16/16 suites (new `biome_distribution` suite).
 
 ## Current state
 

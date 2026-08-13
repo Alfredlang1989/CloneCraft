@@ -257,6 +257,12 @@ target_compile_definitions(test_worldgen_morphology PRIVATE CLONECRAFT_DATA_DIR=
 target_link_libraries(test_worldgen_morphology PRIVATE clonecraft_worldgen)
 add_test(NAME worldgen_morphology COMMAND test_worldgen_morphology)
 
+add_executable(test_biome_distribution tests/TestBiomeDistribution.cpp)
+target_include_directories(test_biome_distribution PRIVATE src third_party)
+target_compile_definitions(test_biome_distribution PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+target_link_libraries(test_biome_distribution PRIVATE omnigrid_worldgen)
+add_test(NAME biome_distribution COMMAND test_biome_distribution)
+
 add_executable(test_camera tests/TestCamera.cpp)
 target_link_libraries(test_camera PRIVATE clonecraft_camera)
 add_test(NAME camera COMMAND test_camera)

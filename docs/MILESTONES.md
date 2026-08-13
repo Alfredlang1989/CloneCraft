@@ -40,12 +40,17 @@ Kept as history; the roadmap below replaces them as the current plan.
   working tree; it needs to be finished, validated and committed as its own
   milestone commit.
 
-- **M02 — Worldgen baseline (#8) ◻**
+- **M02 — Worldgen baseline (#8) ◑**
   Broaden desert climate distribution (shaped hot*dry response, no pure
   threshold lowering); define and prove `BiomeDef::weight` semantics; add
   determinism/statistics tests for seed 1337 and at least one additional seed;
   hierarchy/boundary tests; update worldgen docs. Then freeze the worldgen
   baseline again.
+  Status: implementation done, commit pending. Desert/badlands selection
+  reshaped in `data/biomes.json`; `tests/TestBiomeDistribution.cpp` (6 cases)
+  locks distribution, determinism, hierarchy invariance, normalization and the
+  weight multiplier; `docs/WORLDGEN.md` gains the competition section; all
+  gates PASS (16/16 ctest suites).
 
 - **M03 — #3 Contracts + Prototype Foundation ◻**
   Ownership/dependency contracts; stable namespaced ids; generic

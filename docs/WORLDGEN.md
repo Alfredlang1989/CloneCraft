@@ -166,6 +166,40 @@ terrain and high mountains to gain height explicitly from their biome data.
 The same adjusted `surface_height` is used by terrain passes, decoration anchors,
 postprocess surface queries and `WorldGen::surfaceHeight()`.
 
+## Biome competition
+
+Which biomes contribute at a column is decided by climate competition, not by
+mask priority. Each biome's `selection` object names shared 2D climate fields
+(`temperature`, `rainfall`, `continentalness`, `mountainness`, ...). Every field
+rule contributes a smooth suitability in `[0,1]`: full inside `[min,max]`, with
+a `fade`-wide smoothstep outside. Suitability is the geometric mean over the
+rules, and the score is
+
+```
+score = regionalMask * suitability^selectionSharpness * weight
+```
+
+where `regionalMask` is the optional continuous `terrainMaskField`. Scores are
+normalized per column, so `BiomeDef::weight` is exactly a **relative competition
+multiplier**: a biome with `weight = 3.0` competing against one with `weight =
+1.0` receives three times the resolved weight whenever their selection
+responses are identical. `selectionSharpness > 1` makes strong suitability win
+more decisively. `tests/TestBiomeDistribution.cpp` proves the multiplier
+semantics and locks the following baseline with seed 1337 and a second seed
+(4242): the resolved weights are deterministic per seed, identical for every
+decomposition of the same absolute column (no seams across chunk-group,
+section or region boundaries), and normalized to 1.0 per column.
+
+The default data shapes the desert climate as a broad **hot*dry** response
+(no pure threshold lowering): `temperature` fades in from 0.40 to full at 0.56,
+`rainfall` fades out from full at 0.32 to zero at 0.49, `mountainness` fades
+out above 0.66, and `selectionSharpness = 1.3` keeps a wide transition band
+between desert core and surrounding climate. The distribution baseline across
+the two locked seeds gives desert roughly 9–12% dominant columns with an
+additional ~10–13% transition columns where desert is present but not dominant,
+while `core:badlands` stays the rarer wetter-hot highland niche (always below
+desert dominance, ~0.4–4% depending on seed).
+
 ## Generic pass types
 
 ### `fill_below`
