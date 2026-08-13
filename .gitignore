@@ -44,3 +44,7 @@ __pycache__/
 .opencode/
 .claude/
 graphify-out/
+
+# OgreNext GLSL shader-cache files written into the working directory at runtime
+/[0-9]*PixelShader_ps.glsl
+/[0-9]*VertexShader_vs.glsl
