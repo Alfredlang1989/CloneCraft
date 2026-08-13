@@ -65,6 +65,15 @@
                     anchor.densityField = resolve2D( anchorConfig.densityField,
                                                       "anchor set '" + anchorConfig.id + "'",
                                                       "density" );
+                if( !anchorConfig.biome.empty() )
+                {
+                    const auto biomeIt = biomeById.find( anchorConfig.biome );
+                    if( biomeIt == biomeById.end() )
+                        throw std::invalid_argument( "anchor set '" + anchorConfig.id +
+                                                     "' references unknown biome '" +
+                                                     anchorConfig.biome + "'" );
+                    anchor.biomeIndex = biomeIt->second;
+                }
                 for( const AnchorConditionConfig &conditionConfig : anchorConfig.conditions )
                 {
                     RuntimeAnchorCondition condition;

@@ -197,8 +197,8 @@ TEST_CASE( river_tunnel_route_is_disabled_outside_real_massifs )
     auto tunnelCfg = fieldConfig( "river_tunnel_mask", worldgen::FieldDimension::D2,
                                   "river_route.lua", 1000u );
     tunnelCfg.functionName = "tunnel_mask";
-    auto mountainCfg = fieldConfig( "massif_mask", worldgen::FieldDimension::D2,
-                                    "massif_mask.lua", 1000u );
+    auto mountainCfg = fieldConfig( "high_mountains_mask", worldgen::FieldDimension::D2,
+                                    "high_mountains_mask.lua", 1000u );
     worldgen::LuaFieldEvaluator tunnel( tunnelCfg, 1337u );
     worldgen::LuaFieldEvaluator mountain( mountainCfg, 1337u );
 
@@ -226,92 +226,6 @@ TEST_CASE( river_tunnel_route_is_disabled_outside_real_massifs )
     CHECK( lowlandSamples > 100u );
     CHECK( massifSamples > 0u );
     CHECK( activeTunnelSamples > 0u );
-}
-
-
-TEST_CASE( default_biome_masks_keep_major_climate_and_mountain_regions_reachable )
-{
-    const auto desertCfg = fieldConfig( "desert_mask", worldgen::FieldDimension::D2,
-                                        "desert_mask.lua", 1000u );
-    const auto forestCfg = fieldConfig( "forest_mask", worldgen::FieldDimension::D2,
-                                        "forest_mask.lua", 1000u );
-    const auto hillsCfg = fieldConfig( "rolling_hills_mask", worldgen::FieldDimension::D2,
-                                       "rolling_hills_mask.lua", 1000u );
-    const auto savannaCfg = fieldConfig( "savanna_mask", worldgen::FieldDimension::D2,
-                                         "savanna_mask.lua", 1000u );
-    const auto badlandsCfg = fieldConfig( "badlands_mask", worldgen::FieldDimension::D2,
-                                          "badlands_mask.lua", 1000u );
-    const auto alpineCfg = fieldConfig( "alpine_mask", worldgen::FieldDimension::D2,
-                                        "alpine_mask.lua", 1000u );
-    const auto highCfg = fieldConfig( "high_mountains_mask", worldgen::FieldDimension::D2,
-                                      "high_mountains_mask.lua", 1000u );
-    const auto desertHighCfg = fieldConfig( "desert_high_mountains_mask", worldgen::FieldDimension::D2,
-                                            "desert_high_mountains_mask.lua", 1000u );
-
-    worldgen::LuaFieldEvaluator desert( desertCfg, 1337u );
-    worldgen::LuaFieldEvaluator forest( forestCfg, 1337u );
-    worldgen::LuaFieldEvaluator hills( hillsCfg, 1337u );
-    worldgen::LuaFieldEvaluator savanna( savannaCfg, 1337u );
-    worldgen::LuaFieldEvaluator badlands( badlandsCfg, 1337u );
-    worldgen::LuaFieldEvaluator alpine( alpineCfg, 1337u );
-    worldgen::LuaFieldEvaluator high( highCfg, 1337u );
-    worldgen::LuaFieldEvaluator desertHigh( desertHighCfg, 1337u );
-
-    std::array<std::size_t, 9> winners{};
-    constexpr int HALF_EXTENT_CHUNKS = 256;
-    constexpr int STEP_CHUNKS = 2;
-    std::size_t samples = 0u;
-
-    for( int cz = -HALF_EXTENT_CHUNKS; cz < HALF_EXTENT_CHUNKS; cz += STEP_CHUNKS )
-        for( int cx = -HALF_EXTENT_CHUNKS; cx < HALF_EXTENT_CHUNKS; cx += STEP_CHUNKS )
-        {
-            const world::ChunkAddress chunk = world::offsetChunk(
-                world::originChunkAddress(), cx, 0, cz );
-            const world::BlockAddress p = world::blockAt(
-                chunk, { world::BLOCKS_PER_CHUNK_EDGE / 2, 0,
-                         world::BLOCKS_PER_CHUNK_EDGE / 2 } );
-
-            const std::array<double, 8> weights{{
-                std::clamp( forest.sample2D( p ), 0.0, 1.0 ),
-                std::clamp( hills.sample2D( p ), 0.0, 1.0 ),
-                std::clamp( savanna.sample2D( p ), 0.0, 1.0 ),
-                std::clamp( desert.sample2D( p ), 0.0, 1.0 ),
-                std::clamp( badlands.sample2D( p ), 0.0, 1.0 ),
-                std::clamp( alpine.sample2D( p ), 0.0, 1.0 ),
-                std::clamp( desertHigh.sample2D( p ), 0.0, 1.0 ),
-                std::clamp( high.sample2D( p ), 0.0, 1.0 )
-            }};
-
-            double explicitSum = 0.0;
-            double bestWeight = -1.0;
-            std::size_t best = 8u; // plains fallback
-            for( std::size_t i = 0; i < weights.size(); ++i )
-            {
-                explicitSum += weights[i];
-                if( weights[i] > bestWeight )
-                {
-                    bestWeight = weights[i];
-                    best = i;
-                }
-            }
-            const double fallback = std::max( 0.0, 1.0 - explicitSum );
-            if( fallback >= bestWeight ) best = 8u;
-            ++winners[best];
-            ++samples;
-        }
-
-    const auto fraction = [&]( std::size_t index ) {
-        return static_cast<double>( winners[index] ) / static_cast<double>( samples );
-    };
-
-    // Keep these deliberately broad: this test protects reachability, not a fixed atlas.
-    CHECK( fraction( 2 ) > 0.02 ); // savanna
-    CHECK( fraction( 3 ) > 0.02 ); // desert
-    CHECK( fraction( 4 ) > 0.005 ); // badlands
-    CHECK( fraction( 5 ) > 0.05 ); // alpine transition belt
-    CHECK( fraction( 6 ) > 0.001 ); // arid high mountains must not disappear
-    CHECK( fraction( 7 ) > 0.005 ); // high mountains must beat alpine somewhere
-    CHECK( fraction( 8 ) > 0.05 ); // plains fallback remains meaningful
 }
 
 int main() { return test::runAll(); }

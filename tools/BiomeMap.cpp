@@ -1,8 +1,10 @@
 #include "world/coordinates/Coords.h"
 #include "world/registry/Registry.h"
+#include "world/registry/BlockIdTable.h"
 #include "world/registry/RegistryLoader.h"
 #include "world/worldgen/LuaFieldEvaluator.h"
 #include "world/worldgen/WorldGenConfigLoader.h"
+#include "world/worldgen/WorldGen.h"
 
 #include <algorithm>
 #include <atomic>
@@ -34,7 +36,6 @@ namespace
     struct BiomeSampler
     {
         const world::BiomeDef *biome = nullptr;
-        const worldgen::LuaFieldEvaluator *field = nullptr;
         Rgb color{};
     };
 
@@ -247,31 +248,27 @@ int main( int argc, char **argv )
             return raw;
         };
 
-        std::vector<BiomeSampler> explicitBiomes;
-        const world::BiomeDef *fallbackBiome = nullptr;
+        world::BlockIdTable blockTable( blocks );
+        worldgen::WorldGen generator( cfg, blocks, blockTable, biomes );
+
+        std::vector<BiomeSampler> mapBiomes;
+        std::unordered_map<std::string, std::size_t> biomeIndexById;
         for( const std::string &id : biomes.ids() )
         {
             const world::BiomeDef &biome = biomes.get( id );
-            if( biome.terrainMaskField.empty() )
-            {
-                if( fallbackBiome ) throw std::runtime_error( "multiple fallback biomes" );
-                fallbackBiome = &biome;
-            }
-            else
-            {
-                explicitBiomes.push_back( { &biome, ensureField( biome.terrainMaskField ), biomeColor( biome.id ) } );
-            }
+            biomeIndexById.emplace( id, mapBiomes.size() );
+            mapBiomes.push_back( { &biome, biomeColor( biome.id ) } );
         }
-        if( !fallbackBiome ) throw std::runtime_error( "no fallback biome found" );
+        if( mapBiomes.empty() ) throw std::runtime_error( "no biomes found" );
 
         const auto *riverField = ensureField( "river_mask" );
         const auto *snowField = ensureField( "snow_mask" );
 
         std::vector<std::uint8_t> image( static_cast<std::size_t>( args.width ) * args.height * 3u );
-        std::vector<std::atomic<std::uint64_t>> counts( explicitBiomes.size() + 3u );
-        // explicit biome counts, fallback, river, snow-overlay
+        std::vector<std::atomic<std::uint64_t>> counts( mapBiomes.size() + 2u );
+        // biome dominance counts, river, snow-overlay
         for( auto &c : counts ) c.store( 0 );
-        std::vector<double> contributionSums( explicitBiomes.size() + 1u, 0.0 );
+        std::vector<double> contributionSums( mapBiomes.size(), 0.0 );
         std::mutex contributionMutex;
 
         std::atomic<int> nextRow{ 0 };
@@ -279,7 +276,7 @@ int main( int argc, char **argv )
         std::mutex printMutex;
 
         auto render = [&] {
-            std::vector<double> localContributions( explicitBiomes.size() + 1u, 0.0 );
+            std::vector<double> localContributions( mapBiomes.size(), 0.0 );
             for( ;; )
             {
                 const int py = nextRow.fetch_add( 1 );
@@ -292,46 +289,34 @@ int main( int argc, char **argv )
                     const world::BlockAddress point = world::blockAt(
                         chunk, { world::BLOCKS_PER_CHUNK_EDGE / 2, 0, world::BLOCKS_PER_CHUNK_EDGE / 2 } );
 
-                    double explicitSum = 0.0;
+                    const std::vector<worldgen::BiomeWeightSample> resolved = generator.biomeWeights( point );
+                    std::vector<double> biomeWeights( mapBiomes.size(), 0.0 );
                     double bestWeight = -1.0;
-                    std::size_t best = explicitBiomes.size(); // fallback
-                    std::vector<double> biomeWeights( explicitBiomes.size(), 0.0 );
-                    for( std::size_t i = 0; i < explicitBiomes.size(); ++i )
+                    std::size_t best = 0;
+                    for( const worldgen::BiomeWeightSample &sample : resolved )
                     {
-                        const double w = std::clamp( explicitBiomes[i].field->sample2D( point ), 0.0, 1.0 );
-                        biomeWeights[i] = w;
-                        explicitSum += w;
-                        if( w > bestWeight )
+                        const auto it = biomeIndexById.find( sample.id );
+                        if( it == biomeIndexById.end() ) continue;
+                        const std::size_t i = it->second;
+                        biomeWeights[i] = sample.weight;
+                        localContributions[i] += sample.weight;
+                        if( sample.weight > bestWeight )
                         {
-                            bestWeight = w;
+                            bestWeight = sample.weight;
                             best = i;
                         }
-                    }
-                    const double fallbackWeight = std::max( 0.0, 1.0 - explicitSum );
-                    const double normalizedTotal = std::max( explicitSum + fallbackWeight, 1.0e-12 );
-                    for( std::size_t i = 0; i < explicitBiomes.size(); ++i )
-                        localContributions[i] += biomeWeights[i] / normalizedTotal;
-                    localContributions[explicitBiomes.size()] += fallbackWeight / normalizedTotal;
-
-                    if( fallbackWeight >= bestWeight )
-                    {
-                        bestWeight = fallbackWeight;
-                        best = explicitBiomes.size();
                     }
 
                     Rgb color{};
                     if( args.blend )
                     {
-                        const double totalWeight = explicitSum + fallbackWeight;
-                        const Rgb fallbackColor = biomeColor( fallbackBiome->id );
-                        double rr = fallbackWeight * fallbackColor.r;
-                        double gg = fallbackWeight * fallbackColor.g;
-                        double bb = fallbackWeight * fallbackColor.b;
-                        for( std::size_t i = 0; i < explicitBiomes.size(); ++i )
+                        double rr = 0.0, gg = 0.0, bb = 0.0, totalWeight = 0.0;
+                        for( std::size_t i = 0; i < mapBiomes.size(); ++i )
                         {
-                            rr += biomeWeights[i] * explicitBiomes[i].color.r;
-                            gg += biomeWeights[i] * explicitBiomes[i].color.g;
-                            bb += biomeWeights[i] * explicitBiomes[i].color.b;
+                            rr += biomeWeights[i] * mapBiomes[i].color.r;
+                            gg += biomeWeights[i] * mapBiomes[i].color.g;
+                            bb += biomeWeights[i] * mapBiomes[i].color.b;
+                            totalWeight += biomeWeights[i];
                         }
                         const double denom = std::max( totalWeight, 1.0e-12 );
                         color = {
@@ -342,14 +327,9 @@ int main( int argc, char **argv )
                     }
                     else
                     {
-                        color = best == explicitBiomes.size()
-                            ? biomeColor( fallbackBiome->id )
-                            : explicitBiomes[best].color;
-
-                        // Reveal weak transition areas without inventing a new biome:
-                        // lower dominance is gently mixed toward neutral grassland.
-                        color = mix( biomeColor( fallbackBiome->id ), color,
-                                     std::clamp( 0.35 + bestWeight * 0.85, 0.0, 1.0 ) );
+                        color = mapBiomes[best].color;
+                        color = mix( biomeColor( "core:plains" ), color,
+                                     std::clamp( 0.45 + bestWeight * 0.75, 0.0, 1.0 ) );
                     }
 
                     bool river = false;
@@ -378,8 +358,8 @@ int main( int argc, char **argv )
                     image[out + 2] = color.b;
 
                     counts[best].fetch_add( 1, std::memory_order_relaxed );
-                    if( river ) counts[explicitBiomes.size() + 1u].fetch_add( 1, std::memory_order_relaxed );
-                    if( snow ) counts[explicitBiomes.size() + 2u].fetch_add( 1, std::memory_order_relaxed );
+                    if( river ) counts[mapBiomes.size()].fetch_add( 1, std::memory_order_relaxed );
+                    if( snow ) counts[mapBiomes.size() + 1u].fetch_add( 1, std::memory_order_relaxed );
                 }
                 const int done = finishedRows.fetch_add( 1 ) + 1;
                 if( done % std::max( 1, args.height / 20 ) == 0 || done == args.height )
@@ -414,30 +394,21 @@ int main( int argc, char **argv )
                   << "center chunk: " << args.centerChunkX << ", " << args.centerChunkZ << "\n"
                   << "mode: " << ( args.blend ? "blend" : "dominant" ) << "\n\n";
 
-        for( std::size_t i = 0; i < explicitBiomes.size(); ++i )
+        for( std::size_t i = 0; i < mapBiomes.size(); ++i )
         {
             const auto n = counts[i].load();
-            std::cout << std::setw( 28 ) << std::left << explicitBiomes[i].biome->id
+            std::cout << std::setw( 28 ) << std::left << mapBiomes[i].biome->id
                       << std::right << std::setw( 10 ) << n << "  "
                       << std::fixed << std::setprecision( 2 ) << ( n * 100.0 / total ) << "%\n";
         }
-        {
-            const auto n = counts[explicitBiomes.size()].load();
-            std::cout << std::setw( 28 ) << std::left << fallbackBiome->id
-                      << std::right << std::setw( 10 ) << n << "  "
-                      << std::fixed << std::setprecision( 2 ) << ( n * 100.0 / total ) << "%\n";
-        }
-        std::cout << "\nnormalized terrain contribution (same mask normalization as WorldGen):\n";
-        for( std::size_t i = 0; i < explicitBiomes.size(); ++i )
-            std::cout << "  " << std::setw( 26 ) << std::left << explicitBiomes[i].biome->id
+        std::cout << "\nnormalized terrain contribution (same resolver as WorldGen):\n";
+        for( std::size_t i = 0; i < mapBiomes.size(); ++i )
+            std::cout << "  " << std::setw( 26 ) << std::left << mapBiomes[i].biome->id
                       << std::right << std::fixed << std::setprecision( 2 )
                       << ( contributionSums[i] * 100.0 / total ) << "%\n";
-        std::cout << "  " << std::setw( 26 ) << std::left << fallbackBiome->id
-                  << std::right << std::fixed << std::setprecision( 2 )
-                  << ( contributionSums[explicitBiomes.size()] * 100.0 / total ) << "%\n";
 
-        const auto rivers = counts[explicitBiomes.size() + 1u].load();
-        const auto snow = counts[explicitBiomes.size() + 2u].load();
+        const auto rivers = counts[mapBiomes.size()].load();
+        const auto snow = counts[mapBiomes.size() + 1u].load();
         std::cout << "\nriver overlay (<0.03): " << rivers << "  "
                   << std::fixed << std::setprecision( 2 ) << ( rivers * 100.0 / total ) << "%\n"
                   << "snow overlay (>0.57):  " << snow << "  "

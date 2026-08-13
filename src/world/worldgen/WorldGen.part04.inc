@@ -13,7 +13,9 @@
         std::vector<std::size_t> field2DIndices, field3DIndices;
         std::size_t surfaceField = NO_FIELD;
         std::vector<RuntimeBiomeTerrain> biomeTerrains;
-        std::optional<RuntimeBiomeTerrain> fallbackTerrain;
+        std::unordered_map<std::string, std::size_t> biomeById;
+        std::size_t fallbackBiomeIndex = NO_FIELD;
+        bool legacyBiomeMaskBlend = false;
         std::vector<RuntimePass> passes;
         std::unordered_map<std::string, std::size_t> stageById;
         std::vector<std::vector<std::size_t>> stageMergeOrders;
@@ -63,60 +65,157 @@
             return height;
         }
 
-        template <typename MaskSampler>
-        double adjustedSurfaceHeight( double rawBase, const world::BlockAddress &column,
-                                      MappedOpenSimplexNoise &noise,
-                                      MaskSampler &&sampleMask ) const
+        static double smoothUnit( double t )
         {
-            if( !fallbackTerrain.has_value() ) return rawBase;
+            t = std::clamp( t, 0.0, 1.0 );
+            return t * t * ( 3.0 - 2.0 * t );
+        }
 
-            noise.setSample( column );
-            double weighted = 0.0;
-            double explicitWeight = 0.0;
-            for( const RuntimeBiomeTerrain &biome : biomeTerrains )
+        static double selectionMembership( double value, const RuntimeBiomeSelectionField &rule )
+        {
+            if( value >= rule.minValue && value <= rule.maxValue ) return 1.0;
+            if( rule.fade <= 0.0 ) return 0.0;
+            if( value < rule.minValue )
+                return smoothUnit( ( value - ( rule.minValue - rule.fade ) ) / rule.fade );
+            return 1.0 - smoothUnit( ( value - rule.maxValue ) / rule.fade );
+        }
+
+        template <typename FieldSampler>
+        void calculateBiomeWeights( FieldSampler &&sampleField, std::vector<double> &out ) const
+        {
+            out.assign( biomeTerrains.size(), 0.0 );
+            if( biomeTerrains.empty() ) return;
+
+            if( legacyBiomeMaskBlend )
             {
-                const double weight = std::clamp( sampleMask( biome.maskField ), 0.0, 1.0 );
-                if( weight <= 0.0 ) continue;
-                weighted += weight * terrainProfileHeight( biome, rawBase, noise );
-                explicitWeight += weight;
+                double explicitSum = 0.0;
+                for( std::size_t i = 0; i < biomeTerrains.size(); ++i )
+                {
+                    if( i == fallbackBiomeIndex ) continue;
+                    const RuntimeBiomeTerrain &biome = biomeTerrains[i];
+                    if( biome.maskField == NO_FIELD ) continue;
+                    out[i] = std::clamp( sampleField( biome.maskField ), 0.0, 1.0 );
+                    explicitSum += out[i];
+                }
+                if( fallbackBiomeIndex != NO_FIELD && fallbackBiomeIndex < out.size() )
+                    out[fallbackBiomeIndex] = std::max( 0.0, 1.0 - explicitSum );
+                const double totalLegacy = explicitSum +
+                    ( fallbackBiomeIndex < out.size() ? out[fallbackBiomeIndex] : 0.0 );
+                if( totalLegacy > 1.0e-12 )
+                    for( double &weight : out ) weight /= totalLegacy;
+                return;
             }
 
-            const double fallbackWeight = std::max( 0.0, 1.0 - explicitWeight );
-            if( fallbackWeight > 0.0 )
-                weighted += fallbackWeight * terrainProfileHeight(
-                    *fallbackTerrain, rawBase, noise );
+            double total = 0.0;
+            for( std::size_t i = 0; i < biomeTerrains.size(); ++i )
+            {
+                const RuntimeBiomeTerrain &biome = biomeTerrains[i];
+                double regional = 1.0;
+                if( biome.maskField != NO_FIELD )
+                    regional = std::clamp( sampleField( biome.maskField ), 0.0, 1.0 );
+                if( regional <= 0.0 ) continue;
 
-            const double totalWeight = explicitWeight + fallbackWeight;
-            return totalWeight > 0.0 ? weighted / totalWeight : rawBase;
+                double suitability = 1.0;
+                if( !biome.selectionFields.empty() )
+                {
+                    double product = 1.0;
+                    for( const RuntimeBiomeSelectionField &rule : biome.selectionFields )
+                    {
+                        const double member = selectionMembership( sampleField( rule.field ), rule );
+                        if( member <= 0.0 )
+                        {
+                            product = 0.0;
+                            break;
+                        }
+                        product *= member;
+                    }
+                    suitability = product > 0.0
+                        ? std::pow( product, 1.0 / static_cast<double>( biome.selectionFields.size() ) )
+                        : 0.0;
+                }
+                if( suitability <= 0.0 ) continue;
+
+                const double score = regional *
+                    std::pow( suitability, biome.selectionSharpness ) * biome.weight;
+                out[i] = score;
+                total += score;
+            }
+
+            if( total <= 1.0e-12 )
+            {
+                if( fallbackBiomeIndex != NO_FIELD && fallbackBiomeIndex < out.size() )
+                    out[fallbackBiomeIndex] = 1.0;
+                return;
+            }
+            for( double &weight : out ) weight /= total;
+        }
+
+        double blendedSurfaceHeight( double rawBase, const world::BlockAddress &column,
+                                     MappedOpenSimplexNoise &noise,
+                                     const std::vector<double> &weights ) const
+        {
+            if( weights.empty() ) return rawBase;
+            noise.setSample( column );
+            double height = 0.0;
+            double total = 0.0;
+            for( std::size_t i = 0; i < weights.size(); ++i )
+            {
+                if( weights[i] <= 0.0 ) continue;
+                height += weights[i] * terrainProfileHeight( biomeTerrains[i], rawBase, noise );
+                total += weights[i];
+            }
+            return total > 0.0 ? height / total : rawBase;
+        }
+
+        std::vector<double> biomeWeightsAt( const world::BlockAddress &column ) const
+        {
+            std::vector<double> weights;
+            calculateBiomeWeights( [&]( std::size_t fieldIndex ) {
+                return fields[fieldIndex].sample2D( column );
+            }, weights );
+            return weights;
         }
 
         double adjustedSurfaceAt( const world::BlockAddress &column ) const
         {
             const double rawBase = fields[surfaceField].sample2D( column );
+            if( biomeTerrains.empty() ) return rawBase;
             MappedOpenSimplexNoise noise( config.seed,
                 deriveNoiseSeed( config.seed, UINT64_C( 0xB10B1E7E22A1D5E5 ) ) );
-            return adjustedSurfaceHeight( rawBase, column, noise, [&]( std::size_t maskField ) {
-                return fields[maskField].sample2D( column );
-            } );
+            return blendedSurfaceHeight( rawBase, column, noise, biomeWeightsAt( column ) );
+        }
+
+        using BiomeWeightGrid = std::vector<double>;
+
+        std::size_t biomeGridIndex( std::size_t biomeIndex, std::int64_t lx, std::int64_t lz ) const
+        {
+            return ( biomeIndex * static_cast<std::size_t>( EDGE ) + static_cast<std::size_t>( lx ) ) *
+                   static_cast<std::size_t>( EDGE ) + static_cast<std::size_t>( lz );
         }
 
         void applyBiomeTerrain( const world::ChunkAddress &chunk,
-                                std::vector<SampledField> &sampled ) const
+                                std::vector<SampledField> &sampled,
+                                BiomeWeightGrid &biomeWeights ) const
         {
-            if( !fallbackTerrain.has_value() ) return;
+            if( biomeTerrains.empty() ) return;
+            biomeWeights.assign( biomeTerrains.size() * static_cast<std::size_t>( EDGE ) *
+                                 static_cast<std::size_t>( EDGE ), 0.0 );
             SampledField &surface = sampled[surfaceField];
             MappedOpenSimplexNoise noise( config.seed,
                 deriveNoiseSeed( config.seed, UINT64_C( 0xB10B1E7E22A1D5E5 ) ) );
+            std::vector<double> weights;
             for( std::int64_t lx = 0; lx < EDGE; ++lx )
                 for( std::int64_t lz = 0; lz < EDGE; ++lz )
                 {
                     const world::BlockAddress column = world::blockAt( chunk, { lx, 0, lz } );
+                    calculateBiomeWeights( [&]( std::size_t fieldIndex ) {
+                        return sampled[fieldIndex].at2D( lx, lz );
+                    }, weights );
+                    for( std::size_t i = 0; i < weights.size(); ++i )
+                        biomeWeights[biomeGridIndex( i, lx, lz )] = weights[i];
+
                     const std::size_t index = static_cast<std::size_t>( lx * EDGE + lz );
-                    const double rawBase = surface.values[index];
-                    surface.values[index] = adjustedSurfaceHeight(
-                        rawBase, column, noise, [&]( std::size_t maskField ) {
-                            return sampled[maskField].at2D( lx, lz );
-                        } );
+                    surface.values[index] = blendedSurfaceHeight( surface.values[index], column, noise, weights );
                 }
         }
 
@@ -126,10 +225,24 @@
         }
 
         bool columnEnabled( const RuntimePass &pass, const std::vector<SampledField> &sampled,
+                            const BiomeWeightGrid &biomeWeights,
                             std::int64_t lx, std::int64_t lz ) const
         {
-            return pass.maskField == NO_FIELD ||
-                   matchesCondition( sampled[pass.maskField].at2D( lx, lz ), pass.config.maskCondition );
+            if( pass.maskField != NO_FIELD &&
+                !matchesCondition( sampled[pass.maskField].at2D( lx, lz ), pass.config.maskCondition ) )
+                return false;
+            if( pass.biomeIndex != NO_FIELD )
+            {
+                if( biomeWeights.empty() ) return false;
+                const double weight = biomeWeights[biomeGridIndex( pass.biomeIndex, lx, lz )];
+                if( !matchesCondition( weight, pass.config.biomeCondition ) ) return false;
+                if( pass.config.biomeDominant )
+                {
+                    for( std::size_t i = 0; i < biomeTerrains.size(); ++i )
+                        if( biomeWeights[biomeGridIndex( i, lx, lz )] > weight ) return false;
+                }
+            }
+            return true;
         }
 
         std::int64_t shiftedSurface( double raw, const std::string &fieldId,
@@ -163,8 +276,24 @@
                 }
                 return cache2D[index];
             };
+            const std::vector<double> resolvedBiomeWeights = biomeWeightsAt( column );
             const auto columnEnabledAt = [&]( const RuntimePass &pass ) {
-                return pass.maskField == NO_FIELD ||
-                    matchesCondition( sample2D( pass.maskField ), pass.config.maskCondition );
+                if( pass.maskField != NO_FIELD &&
+                    !matchesCondition( sample2D( pass.maskField ), pass.config.maskCondition ) )
+                    return false;
+                if( pass.biomeIndex != NO_FIELD )
+                {
+                    if( pass.biomeIndex >= resolvedBiomeWeights.size() ||
+                        !matchesCondition( resolvedBiomeWeights[pass.biomeIndex],
+                                           pass.config.biomeCondition ) )
+                        return false;
+                    if( pass.config.biomeDominant )
+                    {
+                        const double weight = resolvedBiomeWeights[pass.biomeIndex];
+                        for( const double candidate : resolvedBiomeWeights )
+                            if( candidate > weight ) return false;
+                    }
+                }
+                return true;
             };
             const auto appliesAt = [&]( const RuntimePass &pass, const world::BlockAddress &point ) {

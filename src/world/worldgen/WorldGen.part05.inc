@@ -90,7 +90,8 @@
         }
 
         std::vector<BlockProposal> buildPassProposals( const RuntimePass &pass,
-            const std::vector<SampledField> &sampled, const world::BlockAddress &origin ) const
+            const std::vector<SampledField> &sampled, const BiomeWeightGrid &biomeWeights,
+            const world::BlockAddress &origin ) const
         {
             std::vector<BlockProposal> proposals;
             const auto emit = [&]( std::int64_t lx, std::int64_t ly, std::int64_t lz ) {
@@ -103,7 +104,7 @@
                 const SampledField &field = sampled[pass.field];
                 for( std::int64_t lx=0; lx<EDGE; ++lx ) for( std::int64_t lz=0; lz<EDGE; ++lz )
                 {
-                    if( !columnEnabled( pass, sampled, lx, lz ) ) continue;
+                    if( !columnEnabled( pass, sampled, biomeWeights, lx, lz ) ) continue;
                     for( std::int64_t ly=0; ly<EDGE; ++ly )
                         if( matchesCondition( field.at3D(lx,ly,lz), pass.config.condition ) ) emit(lx,ly,lz);
                 }
@@ -112,7 +113,7 @@
 
             for( std::int64_t lx=0; lx<EDGE; ++lx ) for( std::int64_t lz=0; lz<EDGE; ++lz )
             {
-                if( !columnEnabled( pass, sampled, lx, lz ) ) continue;
+                if( !columnEnabled( pass, sampled, biomeWeights, lx, lz ) ) continue;
                 std::int64_t topH = 0;
                 std::int64_t bottomH = 0;
                 std::int64_t depth = 1;

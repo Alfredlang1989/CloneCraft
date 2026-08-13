@@ -72,14 +72,27 @@
             std::vector<std::uint8_t> replaceMask;
             std::size_t field = NO_FIELD, maskField = NO_FIELD, surfaceField = NO_FIELD,
                         thicknessField = NO_FIELD, bottomField = NO_FIELD;
+            std::size_t biomeIndex = NO_FIELD;
             std::size_t stageIndex = NO_FIELD;
             std::uint32_t order = 0;
         };
 
+        struct RuntimeBiomeSelectionField
+        {
+            std::size_t field = NO_FIELD;
+            double minValue = 0.0;
+            double maxValue = 1.0;
+            double fade = 0.0;
+        };
+
         struct RuntimeBiomeTerrain
         {
+            std::string id;
             world::BiomeTerrainDef terrain;
             std::size_t maskField = NO_FIELD;
+            double weight = 1.0;
+            double selectionSharpness = 1.0;
+            std::vector<RuntimeBiomeSelectionField> selectionFields;
             std::uint64_t salt = 0;
         };
 
@@ -95,6 +108,7 @@
         {
             AnchorSetConfig config;
             std::size_t surfaceField = NO_FIELD, densityField = NO_FIELD;
+            std::size_t biomeIndex = NO_FIELD;
             std::vector<RuntimeAnchorCondition> conditions;
             StructureBounds influenceBounds;
         };

@@ -28,6 +28,12 @@ namespace worldgen
         std::uint32_t passOrder = 0;
     };
 
+    struct BiomeWeightSample
+    {
+        std::string id;
+        double weight = 0.0;
+    };
+
     class WorldGen
     {
     public:
@@ -45,6 +51,9 @@ namespace worldgen
 
         /** Height is an origin-relative scalar field value, not a flattened world Y. */
         std::int64_t surfaceHeight( const world::BlockAddress &column ) const;
+
+        /** Normalized biome competition weights at one X/Z column. */
+        std::vector<BiomeWeightSample> biomeWeights( const world::BlockAddress &column ) const;
 
         std::uint32_t workerThreads() const;
         std::size_t fieldCount() const;

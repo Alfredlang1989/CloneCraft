@@ -111,6 +111,17 @@ namespace world
         double islandSharpness = 2.0;
     };
 
+    /** Smooth data-driven selector over a shared 2D worldgen field.
+     * Values inside [minValue,maxValue] have full suitability. `fade` controls
+     * the smooth falloff outside that interval. */
+    struct BiomeSelectionFieldDef
+    {
+        std::string field;
+        double minValue = 0.0;
+        double maxValue = 1.0;
+        double fade = 0.0;
+    };
+
     /** Registered biome definition. */
     struct BiomeDef
     {
@@ -122,7 +133,12 @@ namespace world
         double temperature = 0.5; // 0..1 climate target
         double rainfall = 0.5;    // 0..1 climate target
         double continentalness = 0.5; // 0=oceanic, 1=deep continental/highland
-        double weight = 1.0;      // selection weight in worldgen
+        double weight = 1.0;      // relative competition weight in worldgen
+        double selectionSharpness = 1.0; // >1 makes strong suitability win more decisively
+        std::vector<BiomeSelectionFieldDef> selectionFields;
+        // Optional 2D worldgen field (0..1) for regional modulation only.
+        // Climate/geology eligibility belongs in selectionFields so shared fields
+        // are sampled once and reused by every biome.
         // Optional 2D worldgen field (0..1) controlling where this biome
         // contributes its terrain profile. Empty means fallback/default biome.
         std::string terrainMaskField;

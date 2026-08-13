@@ -2,6 +2,7 @@
                 std::string_view( "bottomField" ), std::string_view( "thickness" ),
                 std::string_view( "surfaceOffset" ), std::string_view( "bottomOffset" ),
                 std::string_view( "condition" ), std::string_view( "maskCondition" ),
+                std::string_view( "biomeCondition" ),
                 std::string_view( "replaceBlocks" ),
                 std::string_view( "replaceTags" )
             };
@@ -20,6 +21,8 @@
             readOptional( entry, "priority", pass.priority, path, scope );
             readOptional( entry, "field", pass.field, path, scope );
             readOptional( entry, "maskField", pass.maskField, path, scope );
+            readOptional( entry, "biome", pass.biome, path, scope );
+            readOptional( entry, "biomeDominant", pass.biomeDominant, path, scope );
             readOptional( entry, "surfaceField", pass.surfaceField, path, scope );
             readOptional( entry, "thicknessField", pass.thicknessField, path, scope );
             readOptional( entry, "bottomField", pass.bottomField, path, scope );
@@ -54,6 +57,7 @@
             };
             parseCondition( "condition", pass.condition );
             parseCondition( "maskCondition", pass.maskCondition );
+            parseCondition( "biomeCondition", pass.biomeCondition );
 
             auto requireField = [&]( const std::string &id, const char *role,
                                      FieldDimension expected ) {
@@ -123,6 +127,7 @@
                 constexpr std::array allowed{
                     std::string_view( "id" ), std::string_view( "surfaceField" ),
                     std::string_view( "surfaceMode" ), std::string_view( "densityField" ),
+                    std::string_view( "biome" ), std::string_view( "biomeCondition" ),
                     std::string_view( "surfaceOffset" ), std::string_view( "spacing" ),
                     std::string_view( "maxSurfaceDrop" ), std::string_view( "chance" ),
                     std::string_view( "salt" ), std::string_view( "conditions" )
@@ -144,11 +149,33 @@
                     else configError( path, scope + ".surfaceMode must be 'field' or 'postprocess'" );
                 }
                 readOptional( entry, "densityField", anchor.densityField, path, scope );
+                readOptional( entry, "biome", anchor.biome, path, scope );
                 readOptional( entry, "surfaceOffset", anchor.surfaceOffset, path, scope );
                 readOptional( entry, "spacing", anchor.spacing, path, scope );
                 readOptional( entry, "maxSurfaceDrop", anchor.maxSurfaceDrop, path, scope );
                 readOptional( entry, "chance", anchor.chance, path, scope );
                 readOptional( entry, "salt", anchor.salt, path, scope );
+                if( const auto biomeCondition = optionalObject( entry, "biomeCondition", path, scope ) )
+                {
+                    constexpr std::array conditionAllowed{
+                        std::string_view( "op" ), std::string_view( "value" ),
+                        std::string_view( "max" )
+                    };
+                    const std::string conditionScope = scope + ".biomeCondition";
+                    checkUnknownFields( *biomeCondition, conditionAllowed, path, conditionScope );
+                    const auto opIt = biomeCondition->find( "op" );
+                    if( opIt != biomeCondition->end() )
+                    {
+                        if( !opIt->is_string() )
+                            configError( path, conditionScope + ".op must be a string" );
+                        anchor.biomeCondition.op = parseCompareOp( opIt->get<std::string>(), path, conditionScope );
+                    }
+                    readOptional( *biomeCondition, "value", anchor.biomeCondition.value, path, conditionScope );
+                    readOptional( *biomeCondition, "max", anchor.biomeCondition.maxValue, path, conditionScope );
+                    if( anchor.biomeCondition.op == CompareOp::Between &&
+                        anchor.biomeCondition.maxValue < anchor.biomeCondition.value )
+                        configError( path, conditionScope + ".max must be >= value" );
+                }
                 if( anchor.spacing < 1 )
                     configError( path, scope + ": spacing must be >= 1" );
                 if( anchor.maxSurfaceDrop < 0 )

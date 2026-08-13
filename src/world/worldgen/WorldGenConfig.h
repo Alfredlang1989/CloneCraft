@@ -71,6 +71,8 @@ namespace worldgen
 
         std::string field;
         std::string maskField;
+        std::string biome; // optional resolved biome id; ANDed with maskField when both are present
+        bool biomeDominant = false; // require this biome to be the strongest resolved weight
         std::string surfaceField;
         std::string thicknessField;
         std::string bottomField;
@@ -80,6 +82,7 @@ namespace worldgen
 
         FieldCondition condition;
         FieldCondition maskCondition;
+        FieldCondition biomeCondition{ CompareOp::Greater, 0.30, 1.0 };
         std::vector<std::string> replaceBlocks;
         std::vector<std::string> replaceTags;
     };
@@ -110,6 +113,8 @@ namespace worldgen
         std::string surfaceField = "surface_height";
         AnchorSurfaceMode surfaceMode = AnchorSurfaceMode::Field;
         std::string densityField; // optional 2D 0..1 multiplier
+        std::string biome; // optional resolved biome id used for placement eligibility/density
+        FieldCondition biomeCondition{ CompareOp::Greater, 0.25, 1.0 };
         std::int32_t surfaceOffset = 0;
         std::int32_t spacing = 1; // one jittered candidate per spacing x spacing cell
         std::int32_t maxSurfaceDrop = 1024; // Postprocess search safety bound

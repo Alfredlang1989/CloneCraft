@@ -354,7 +354,7 @@ namespace world
         static const char *const allowed[] = { "id", "displayName", "surfaceBlock",
                                                "fillerBlock", "resourceId",
                                                "temperature", "rainfall", "continentalness",
-                                               "weight", "terrainMaskField", "terrain" };
+                                               "weight", "selection", "terrainMaskField", "terrain" };
         const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
 
         int index = 0;
@@ -420,6 +420,93 @@ namespace world
                 if( def.continentalness < 0.0 || def.continentalness > 1.0 )
                     throw RegistryError( context( source, index ) +
                                          ": 'continentalness' must be in 0..1" );
+            }
+
+            if( entry.contains( "selection" ) )
+            {
+                const json &selection = entry["selection"];
+                if( !selection.is_object() )
+                    throw RegistryError( context( source, index ) + ": 'selection' must be an object" );
+
+                static const char *const selectionAllowed[] = { "sharpness", "fields" };
+                for( const auto &[key, value] : selection.items() )
+                {
+                    (void)value;
+                    bool known = false;
+                    for( const char *candidate : selectionAllowed ) known = known || key == candidate;
+                    if( !known )
+                        throw RegistryError( context( source, index ) +
+                                             ": unknown selection field '" + key + "'" );
+                }
+
+                if( selection.contains( "sharpness" ) )
+                {
+                    if( !selection["sharpness"].is_number() )
+                        throw RegistryError( context( source, index ) +
+                                             ": selection.sharpness must be a number" );
+                    def.selectionSharpness = selection["sharpness"].get<double>();
+                    if( def.selectionSharpness <= 0.0 )
+                        throw RegistryError( context( source, index ) +
+                                             ": selection.sharpness must be > 0" );
+                }
+
+                if( selection.contains( "fields" ) )
+                {
+                    const json &fields = selection["fields"];
+                    if( !fields.is_array() )
+                        throw RegistryError( context( source, index ) +
+                                             ": selection.fields must be an array" );
+                    for( const json &rule : fields )
+                    {
+                        if( !rule.is_object() )
+                            throw RegistryError( context( source, index ) +
+                                                 ": selection.fields entries must be objects" );
+                        static const char *const ruleAllowed[] = { "field", "min", "max", "fade" };
+                        for( const auto &[key, value] : rule.items() )
+                        {
+                            (void)value;
+                            bool known = false;
+                            for( const char *candidate : ruleAllowed ) known = known || key == candidate;
+                            if( !known )
+                                throw RegistryError( context( source, index ) +
+                                                     ": unknown selection rule field '" + key + "'" );
+                        }
+                        BiomeSelectionFieldDef outRule;
+                        if( !rule.contains( "field" ) || !rule["field"].is_string() ||
+                            rule["field"].get<std::string>().empty() )
+                            throw RegistryError( context( source, index ) +
+                                                 ": selection.fields.field must be a non-empty string" );
+                        outRule.field = rule["field"].get<std::string>();
+                        if( rule.contains( "min" ) )
+                        {
+                            if( !rule["min"].is_number() )
+                                throw RegistryError( context( source, index ) +
+                                                     ": selection.fields.min must be a number" );
+                            outRule.minValue = rule["min"].get<double>();
+                        }
+                        if( rule.contains( "max" ) )
+                        {
+                            if( !rule["max"].is_number() )
+                                throw RegistryError( context( source, index ) +
+                                                     ": selection.fields.max must be a number" );
+                            outRule.maxValue = rule["max"].get<double>();
+                        }
+                        if( rule.contains( "fade" ) )
+                        {
+                            if( !rule["fade"].is_number() )
+                                throw RegistryError( context( source, index ) +
+                                                     ": selection.fields.fade must be a number" );
+                            outRule.fade = rule["fade"].get<double>();
+                        }
+                        if( outRule.maxValue < outRule.minValue )
+                            throw RegistryError( context( source, index ) +
+                                                 ": selection.fields.max must be >= min" );
+                        if( outRule.fade < 0.0 )
+                            throw RegistryError( context( source, index ) +
+                                                 ": selection.fields.fade must be >= 0" );
+                        def.selectionFields.push_back( std::move( outRule ) );
+                    }
+                }
             }
 
             if( entry.contains( "terrainMaskField" ) )

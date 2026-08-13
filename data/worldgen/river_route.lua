@@ -12,12 +12,10 @@ local function smoothstep(a,b,x)
     return t*t*(3-2*t)
 end
 
--- This deliberately follows the geology-only signal exposed as massif_mask.lua.
--- It must not use the climate-filtered high-mountain biome masks: desert high
--- mountains are still real massifs for river routing. Do not reconstruct
--- surface_height here: the real surface is biome-adjusted in C++, and duplicating
--- the old height formula was what made river carving dig far below Y=0 after the
--- v18.3.5 terrain change.
+-- This deliberately follows the same macro-mountain signal used by the
+-- high-mountain biome masks. Do not reconstruct surface_height here: the real
+-- surface is biome-adjusted in C++, and duplicating the old height formula was
+-- what made river carving dig far below Y=0 after the v18.3.5 terrain change.
 local function mountain_strength()
     local continental=0.5+0.5*noise2(0.00034, 111)
     local rugged=0.5+0.5*noise2(0.00047, 112)

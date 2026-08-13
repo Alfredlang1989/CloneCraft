@@ -49,36 +49,63 @@
                 {
                     const world::BiomeDef &biome = biomes->get( biomeId );
                     RuntimeBiomeTerrain runtime;
+                    runtime.id = biome.id;
                     runtime.terrain = biome.terrain;
+                    runtime.weight = biome.weight;
+                    runtime.selectionSharpness = biome.selectionSharpness;
                     runtime.salt = stableStringSalt( biome.id );
-                    if( biome.terrainMaskField.empty() )
+
+                    for( const world::BiomeSelectionFieldDef &rule : biome.selectionFields )
                     {
-                        if( fallbackTerrain.has_value() )
-                            throw std::invalid_argument(
-                                "multiple biomes without terrainMaskField; exactly one fallback terrain is allowed" );
-                        fallbackTerrain = runtime;
-                        continue;
+                        const auto fieldIt = fieldById.find( rule.field );
+                        if( fieldIt == fieldById.end() )
+                            throw std::invalid_argument( "biome '" + biome.id +
+                                "' selection references unknown field '" + rule.field + "'" );
+                        if( fields[fieldIt->second].config().dimension != FieldDimension::D2 )
+                            throw std::invalid_argument( "biome '" + biome.id +
+                                "' selection field '" + rule.field + "' must be 2D" );
+                        runtime.selectionFields.push_back( { fieldIt->second, rule.minValue,
+                                                             rule.maxValue, rule.fade } );
                     }
 
-                    const auto maskIt = fieldById.find( biome.terrainMaskField );
-                    if( maskIt == fieldById.end() )
-                        throw std::invalid_argument( "biome '" + biome.id +
-                                                     "' references unknown terrainMaskField '" +
-                                                     biome.terrainMaskField + "'" );
-                    if( fields[maskIt->second].config().dimension != FieldDimension::D2 )
-                        throw std::invalid_argument( "biome '" + biome.id +
-                                                     "' terrainMaskField must be 2D" );
-                    runtime.maskField = maskIt->second;
-                    biomeTerrains.push_back( runtime );
+                    if( biome.terrainMaskField.empty() )
+                    {
+                        if( fallbackBiomeIndex != NO_FIELD )
+                            throw std::invalid_argument(
+                                "multiple biomes without terrainMaskField; exactly one fallback terrain is allowed" );
+                        fallbackBiomeIndex = biomeTerrains.size();
+                    }
+                    else
+                    {
+                        const auto maskIt = fieldById.find( biome.terrainMaskField );
+                        if( maskIt == fieldById.end() )
+                            throw std::invalid_argument( "biome '" + biome.id +
+                                                         "' references unknown terrainMaskField '" +
+                                                         biome.terrainMaskField + "'" );
+                        if( fields[maskIt->second].config().dimension != FieldDimension::D2 )
+                            throw std::invalid_argument( "biome '" + biome.id +
+                                                         "' terrainMaskField must be 2D" );
+                        runtime.maskField = maskIt->second;
+                    }
+
+                    const std::size_t runtimeIndex = biomeTerrains.size();
+                    if( !biomeById.emplace( biome.id, runtimeIndex ).second )
+                        throw std::invalid_argument( "duplicate runtime biome '" + biome.id + "'" );
+                    biomeTerrains.push_back( std::move( runtime ) );
                 }
 
-                if( !fallbackTerrain.has_value() )
+                if( fallbackBiomeIndex == NO_FIELD )
                 {
                     RuntimeBiomeTerrain fallback;
+                    fallback.id = "<implicit-default>";
                     fallback.terrain = world::BiomeTerrainDef{};
-                    fallback.salt = stableStringSalt( "<implicit-default>" );
-                    fallbackTerrain = fallback;
+                    fallback.salt = stableStringSalt( fallback.id );
+                    fallbackBiomeIndex = biomeTerrains.size();
+                    biomeById.emplace( fallback.id, fallbackBiomeIndex );
+                    biomeTerrains.push_back( std::move( fallback ) );
                 }
+                legacyBiomeMaskBlend = std::all_of( biomeTerrains.begin(), biomeTerrains.end(),
+                    []( const RuntimeBiomeTerrain &biome ) { return biome.selectionFields.empty(); } );
             }
 
             blockTags.resize( table.size() );
@@ -143,6 +170,15 @@
 
                 if( !pass.config.maskField.empty() )
                     pass.maskField = resolve( pass.config.maskField, FieldDimension::D2, "mask" );
+                if( !pass.config.biome.empty() )
+                {
+                    const auto biomeIt = biomeById.find( pass.config.biome );
+                    if( biomeIt == biomeById.end() )
+                        throw std::invalid_argument( "pass '" + pass.config.id +
+                                                     "' references unknown biome '" +
+                                                     pass.config.biome + "'" );
+                    pass.biomeIndex = biomeIt->second;
+                }
 
                 switch( pass.config.type )
                 {

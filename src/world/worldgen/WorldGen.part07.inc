@@ -3,12 +3,13 @@
             const std::size_t i=mState->field2DIndices[job]; sampled[i]=mState->fields[i].sampleChunk(chunk);
         });
 
-        mState->applyBiomeTerrain( chunk, sampled );
+        State::BiomeWeightGrid biomeWeights;
+        mState->applyBiomeTerrain( chunk, sampled, biomeWeights );
 
         std::vector<std::vector<DecorationAnchor>> anchors(mState->anchorSets.size());
         if(!mState->decorations.empty())
             mState->executor->run(mState->anchorSets.size(),[&](std::size_t i){
-                anchors[i]=mState->buildAnchors(mState->anchorSets[i],origin,sampled);
+                anchors[i]=mState->buildAnchors(mState->anchorSets[i],origin,sampled,biomeWeights);
             });
 
         const auto decorationTouchesChunkY=[&](){
@@ -40,7 +41,7 @@
                 else {topField=&sampled[pass.field]; if(pass.config.type==PassType::Surface) offset=pass.config.surfaceOffset;}
                 for(std::int64_t lx=0;lx<EDGE;++lx) for(std::int64_t lz=0;lz<EDGE;++lz)
                 {
-                    if(!mState->columnEnabled(pass,sampled,lx,lz)) continue;
+                    if(!mState->columnEnabled(pass,sampled,biomeWeights,lx,lz)) continue;
                     highest=std::max(highest,mState->shiftedSurface(topField->at2D(lx,lz),topField->id,offset));
                 }
             }
@@ -66,7 +67,7 @@
             });
             std::vector<std::vector<BlockProposal>> proposals(mState->passes.size());
             mState->executor->run(mState->passes.size(),[&](std::size_t i){
-                proposals[i]=mState->buildPassProposals(mState->passes[i],sampled,origin);
+                proposals[i]=mState->buildPassProposals(mState->passes[i],sampled,biomeWeights,origin);
             });
             const auto applyStage = [&]( const std::vector<std::size_t> &order ) {
                 for( const std::size_t passIndex : order )
@@ -118,11 +119,21 @@
     std::int64_t WorldGen::surfaceHeight( const world::BlockAddress &column ) const
     {
         const LuaFieldEvaluator &surface=mState->fields[mState->surfaceField];
-        const double height = mState->fallbackTerrain.has_value()
+        const double height = !mState->biomeTerrains.empty()
             ? mState->adjustedSurfaceAt( column )
             : surface.sample2D( column );
         return floorToBlock( height, surface.config().id );
     }
+    std::vector<BiomeWeightSample> WorldGen::biomeWeights( const world::BlockAddress &column ) const
+    {
+        const std::vector<double> weights = mState->biomeWeightsAt( column );
+        std::vector<BiomeWeightSample> out;
+        out.reserve( weights.size() );
+        for( std::size_t i = 0; i < weights.size(); ++i )
+            out.push_back( { mState->biomeTerrains[i].id, weights[i] } );
+        return out;
+    }
+
     std::uint32_t WorldGen::workerThreads() const { return mState->executor->workerCount(); }
     std::size_t WorldGen::fieldCount() const { return mState->fields.size(); }
     std::size_t WorldGen::stageCount() const { return mState->stageMergeOrders.size(); }

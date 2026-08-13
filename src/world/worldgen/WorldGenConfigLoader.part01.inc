@@ -158,3 +158,4 @@
                 std::string_view( "stage" ), std::string_view( "block" ),
                 std::string_view( "priority" ),
                 std::string_view( "field" ), std::string_view( "maskField" ),
+                std::string_view( "biome" ), std::string_view( "biomeDominant" ),

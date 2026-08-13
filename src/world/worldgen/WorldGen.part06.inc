@@ -20,8 +20,21 @@
                                               : fields[fieldIndex].sample2D( point );
         }
 
+        double biomeWeightAtColumn( std::size_t biomeIndex, const world::BlockAddress &column,
+                                    const world::BlockAddress &origin,
+                                    const BiomeWeightGrid &biomeWeights ) const
+        {
+            world::RelativeI64 d{};
+            if( !biomeWeights.empty() && world::blockDeltaWithin( column, origin, EDGE - 1, d ) &&
+                d.x >= 0 && d.x < EDGE && d.z >= 0 && d.z < EDGE )
+                return biomeWeights[biomeGridIndex( biomeIndex, d.x, d.z )];
+            const std::vector<double> weights = biomeWeightsAt( column );
+            return biomeIndex < weights.size() ? weights[biomeIndex] : 0.0;
+        }
+
         std::vector<DecorationAnchor> buildAnchors( const RuntimeAnchorSet &anchorSet,
-            const world::BlockAddress &origin, const std::vector<SampledField> &sampled ) const
+            const world::BlockAddress &origin, const std::vector<SampledField> &sampled,
+            const BiomeWeightGrid &biomeWeights ) const
         {
             std::vector<DecorationAnchor> anchors;
             const std::int64_t minDx = -static_cast<std::int64_t>( anchorSet.influenceBounds.maxX );
@@ -45,6 +58,15 @@
                 double probability = anchorSet.config.chance;
                 if( anchorSet.densityField != NO_FIELD )
                     probability *= std::clamp( fieldValueAt( anchorSet.densityField, column, origin, sampled ), 0.0, 1.0 );
+                if( anchorSet.biomeIndex != NO_FIELD )
+                {
+                    const double biomeWeight = biomeWeightAtColumn( anchorSet.biomeIndex, column,
+                                                                     origin, biomeWeights );
+                    if( !matchesCondition( biomeWeight, anchorSet.config.biomeCondition ) )
+                        probability = 0.0;
+                    else
+                        probability *= std::clamp( biomeWeight, 0.0, 1.0 );
+                }
                 bool enabled = unitRandom( hashAnchorCell(config.seed,anchorSet.config.salt,cellX,cellZ,2u) ) < probability;
                 for( const RuntimeAnchorCondition &condition : anchorSet.conditions )
                 {
