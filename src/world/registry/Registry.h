@@ -203,6 +203,18 @@ namespace world
     };
 
     /**
+     * Runtime value of a data-driven sidecar/property type (M05). Mirrors
+     * SidecarDef::defaultValue: integer types store std::uint32_t, the Float
+     * value type stores float. The alternative a value must hold is enforced
+     * by the resolver (WorldState) against the SidecarDef::valueType, so a
+     * sidecar never mixes alternatives.
+     */
+    using PropertyValue = std::variant<std::uint32_t, float>;
+
+    /** Data-driven id of the orientation pilot type (MODS/Default/sidecars.json). */
+    inline constexpr const char *CORE_ORIENTATION_SIDECAR = "core:orientation";
+
+    /**
      * Registered sidecar type (issue #3, section 5.1). Mods declare new
      * sidecar types in sidecars.json; the optimized C++ storage per sidecar
      * may differ from this metadata. The serialization version prepares the

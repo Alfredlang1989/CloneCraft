@@ -13,16 +13,17 @@
     {"name":"world.registry","prefix":"src/world/registry/","mayDependOn":["world.registry","world.coordinates","core"]},
     {"name":"world.worldgen","prefix":"src/world/worldgen/","mayDependOn":["world.worldgen","world.coordinates","world.registry","core"]},
     {"name":"world.chunk","prefix":"src/world/chunk/","mayDependOn":["world.chunk","world.coordinates","world.registry","world.worldgen","core"]},
-    {"name":"world.interaction","prefix":"src/world/interaction/","mayDependOn":["world.interaction","world.coordinates","world.chunk","core"]},
+    {"name":"world.state","prefix":"src/world/state/","mayDependOn":["world.state","world.chunk","world.registry","world.coordinates","core"]},
+    {"name":"world.interaction","prefix":"src/world/interaction/","mayDependOn":["world.interaction","world.coordinates","world.chunk","world.state","core"]},
     {"name":"world.mesh","prefix":"src/world/mesh/","mayDependOn":["world.mesh","world.coordinates","world.registry","world.chunk","core"]},
     {"name":"render","prefix":"src/render/","mayDependOn":["render","core","platform","debug","world.coordinates","world.registry","world.chunk","world.mesh","world.worldgen","ui","config"]},
-    {"name":"app","prefix":"src/app/","mayDependOn":["app","core","debug","camera","input","platform","render","world.coordinates","world.registry","world.worldgen","world.chunk","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"]},
+    {"name":"app","prefix":"src/app/","mayDependOn":["app","core","debug","camera","input","platform","render","world.coordinates","world.registry","world.worldgen","world.chunk","world.state","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"]},
     {"name":"main","prefix":"src/main.cpp","mayDependOn":["main","app","core"]}
   ],
   "ignoreIncludePrefixes":["third_party/"],
   "warnCppLinesAbove":500,
   "externalIncludePolicies":[
-    {"modules":["core","debug","camera","world.coordinates","world.registry","world.worldgen","world.chunk","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"],"forbiddenPrefixes":["SDL3/","Ogre","Hlms/","Math/Simple/Ogre"]},
+    {"modules":["core","debug","camera","world.coordinates","world.registry","world.worldgen","world.chunk","world.state","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"],"forbiddenPrefixes":["SDL3/","Ogre","Hlms/","Math/Simple/Ogre"]},
     {"modules":["input","platform"],"forbiddenPrefixes":["Ogre","Hlms/","Math/Simple/Ogre"]},
     {"modules":["render"],"forbiddenPrefixes":["SDL3/"]}
   ],

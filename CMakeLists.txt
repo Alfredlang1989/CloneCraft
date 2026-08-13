@@ -140,6 +140,13 @@ target_include_directories(omnigrid_interaction PUBLIC src)
 set_target_properties(omnigrid_interaction PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_link_libraries(omnigrid_interaction PUBLIC omnigrid_chunk)
 
+add_library(omnigrid_state STATIC
+  src/world/state/WorldState.cpp
+  src/world/state/MemoryPersistenceSink.cpp)
+target_include_directories(omnigrid_state PUBLIC src)
+set_target_properties(omnigrid_state PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(omnigrid_state PUBLIC omnigrid_chunk omnigrid_registry)
+
 add_library(omnigrid_camera STATIC
   src/camera/FreeCameraController.cpp)
 target_include_directories(omnigrid_camera PUBLIC src)
@@ -189,6 +196,7 @@ if(OMNIGRID_BUILD_APP)
     omnigrid_ui
     omnigrid_mesh
     omnigrid_chunk
+    omnigrid_state
     omnigrid_interaction
     omnigrid_camera
     omnigrid_dynamic
@@ -241,6 +249,12 @@ target_include_directories(test_sidecars PRIVATE src)
 target_compile_definitions(test_sidecars PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_sidecars PRIVATE omnigrid_chunk)
 add_test(NAME sidecars COMMAND test_sidecars)
+
+add_executable(test_world_state tests/TestWorldState.cpp)
+target_include_directories(test_world_state PRIVATE src)
+target_compile_definitions(test_world_state PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
+target_link_libraries(test_world_state PRIVATE omnigrid_state)
+add_test(NAME world_state COMMAND test_world_state)
 
 add_executable(test_worldgen tests/TestWorldGen.cpp)
 target_include_directories(test_worldgen PRIVATE src)

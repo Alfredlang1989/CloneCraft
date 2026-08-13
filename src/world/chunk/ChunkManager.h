@@ -2,6 +2,7 @@
 
 #include "world/chunk/Chunk.h"
 #include "world/chunk/ChunkGroup.h"
+#include "world/chunk/OrientationSidecar.h"
 
 #include <functional>
 #include <map>
@@ -24,15 +25,30 @@ namespace world
 
         std::optional<std::uint16_t> tryBlockAt( const BlockAddress & ) const;
         std::uint16_t blockAt( const BlockAddress & ) const;
-        void setBlock( const BlockAddress &, std::uint16_t blockId );
+        /** Central block mutation. @return true when the block actually changed. */
+        bool setBlock( const BlockAddress &, std::uint16_t blockId );
 
-        // Sparse chunk sidecars (issue #3, section 5). Sidecar state never
-        // creates or unloads chunks; absent chunks simply have no sidecar.
-        // The orientation setters return false when nothing changed (no
-        // notification is emitted for no-ops).
+        // Generic data-driven sidecar state (issue #3, section 5; M05
+        // resolver). Sidecar state never creates or unloads chunks; absent
+        // chunks simply have no sidecar. The caller supplies the type's
+        // declared default so ChunkManager stays content-agnostic.
+        bool setBlockProperty( const BlockAddress &, const std::string &typeId,
+                               const PropertyValue &value, const PropertyValue &defaultValue );
+        std::optional<PropertyValue> blockProperty( const BlockAddress &,
+                                                    const std::string &typeId ) const;
+        const Sidecar<PropertyValue> *chunkPropertySidecar( const ChunkAddress &,
+                                                            const std::string &typeId ) const;
+        /** @return true when a sidecar of the type actually existed. */
+        bool clearChunkProperty( const ChunkAddress &, const std::string &typeId );
+
+        // Orientation pilot shim (compat + convenience, issue #3 section 5).
+        // Stored through the generic sidecar path under the data-driven id
+        // "core:orientation" (CORE_ORIENTATION_SIDECAR), so the unified world
+        // state resolver sees exactly the same state. The setters return
+        // false when nothing changed (no notification is emitted for no-ops).
         bool setBlockOrientation( const BlockAddress &, BlockOrientation );
         std::optional<BlockOrientation> blockOrientation( const BlockAddress & ) const;
-        const OrientationSidecar *chunkOrientationSidecar( const ChunkAddress & ) const;
+        const Sidecar<PropertyValue> *chunkOrientationSidecar( const ChunkAddress & ) const;
         void clearChunkOrientations( const ChunkAddress & );
 
         std::size_t groupCount() const { return mGroups.size(); }

@@ -93,11 +93,31 @@ Kept as history; the roadmap below replaces them as the current plan.
   findings (zombie sidecars, no-op dirty, schema contradiction, cross-call
   claims) verified and fixed.
 
-- **M05 — #3 Unified World State ◻**
+- **M05 — #3 Unified World State ✔**
   `get` / `has` / `set`; prototype defaults; sidecar resolver; central block
   mutation; dirty hooks; mesh/neighbour invalidation; persistence-dirty
   abstraction without RocksDB. Lua/game code must not know whether a value
   comes from prototype, sidecar or later ECS.
+  Status: done. `world::WorldState` (src/world/state/, new `world.state`
+  module) is the single game-facing entry point: `has`/`get`/`set` by any
+  declared sidecar id, `get` falls back to the type's data-driven default
+  (absent/unloaded chunks still answer; only unknown ids return nullopt),
+  `set` rejects unknown ids, type-mismatched values and AIR positions and
+  never creates chunks, default writes remove stored entries again. Chunk
+  stores all sidecar types generically (`std::map<typeId, Sidecar<PropertyValue>>`,
+  registry-driven, no per-field members — M04 review constraint) and the
+  M04 orientation pilot survives as a ChunkManager shim over the same
+  `core:orientation` sidecar. Central block mutation through
+  `WorldState::setBlock` (ChunkManager `setBlock` now returns whether the
+  block changed; no-ops never dirty); granular change hooks (`what` =
+  `"block"` or the property id) fire only for real changes. Persistence-dirty
+  abstraction `PersistenceSink` with reference `MemoryPersistenceSink`
+  (dirty chunks + last-write-wins block/property deltas; flush clears);
+  RocksDB backend in M09. Mesh/neighbour invalidation reuses the existing
+  ChunkManager change notifications (boundary neighbours included) already
+  consumed by the renderer. New suite `world_state` (13 cases), `sidecars`
+  updated to the generic property API; gates PASS (20/20 ctest suites,
+  architecture incl. `world.state`, clang-tidy/AST).
   Constraint from the M04 review: no per-field sidecar members in Chunk
   (`mTemperature`/`mDamage`/`mPower` as more `unique_ptr`s is forbidden) —
   M05 brings the registry-driven resolver that stores values for any declared

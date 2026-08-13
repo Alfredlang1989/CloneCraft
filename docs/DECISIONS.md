@@ -269,3 +269,43 @@ v16 local noise while moving large-address work out of the voxel hot path.
 - 3D fields are X-sliced for worker-pool utilisation, without changing their sampled values;
 - naive `worldX % period` before OpenSimplex is forbidden because the real
   periodicity lives in OpenSimplex's transformed lattice, not raw XYZ.
+
+## ADR-027 - Unified world state owns all gameplay block mutation (M05)
+
+**Decision:** `world::WorldState` (src/world/state/, module `world.state`) is
+the single game-facing entry point for block and block-property state.
+Gameplay/Lua code calls `has`/`get`/`set` by data-driven property id and
+`setBlock` for block mutation. It resolves values against the
+`SidecarRegistry`: `get()` falls back to the type's declared default (even for
+absent/unloaded chunks; only unknown ids return nullopt), `set()` rejects
+unknown ids, type-mismatched values and AIR positions and never creates
+chunks, and default writes remove stored entries. All gameplay mutations flow
+through WorldState into granular change hooks (`what` = `"block"` or the
+property id) and a `PersistenceSink` (dirty-chunk/last-write-wins deltas in
+the reference `MemoryPersistenceSink`; RocksDB backend in M09).
+
+**Why:** Callers must never know whether a value comes from a prototype/
+sidecar default or stored sidecar state (or, later, the M08 ECS hot layer).
+Centralising mutation makes dirty tracking, change hooks and persistence
+one code path instead of scattered direct ChunkManager writes; M06 actions and
+M08 events depend on that. The M04 pilot showed direct chunk orientation
+writes scale poorly once multiple sidecar types exist.
+
+**Consequences:**
+
+- Chunk stores all sidecar types generically
+  (`std::map<std::string, std::unique_ptr<Sidecar<PropertyValue>>>`, keyed by
+  the data-driven type id; std::map keeps serialization order deterministic
+  for M09). No per-field sidecar members are ever added to Chunk.
+- `PropertyValue = std::variant<std::uint32_t, float>` mirrors
+  `SidecarDef::defaultValue`; the resolver enforces the value type declared in
+  `sidecars.json`, so a sidecar never mixes alternatives.
+- ChunkManager keeps `setBlockOrientation`/`blockOrientation` as convenience
+  shims over the same `core:orientation` sidecar the unified world state uses —
+  one storage, two views, verified by tests.
+- ChunkManager `setBlock` returns whether the block actually changed; no-op
+  writes are never dirty, never notify and never reach the sink.
+- Worldgen base load (`assignBlocks` via the streaming manager) stays outside
+  the unified mutation path — it is content loading, not gameplay mutation.
+- The M04 review constraint stands: adding `mTemperature`/`mDamage`/`mPower`
+  as more `unique_ptr` members to Chunk is forbidden.

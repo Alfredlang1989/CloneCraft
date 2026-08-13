@@ -18,6 +18,8 @@
 #include "world/registry/BlockIdTable.h"
 #include "world/registry/PrototypeIdTable.h"
 #include "world/registry/Registry.h"
+#include "world/state/MemoryPersistenceSink.h"
+#include "world/state/WorldState.h"
 #include "world/worldgen/WorldGen.h"
 
 #include <chrono>
@@ -69,6 +71,8 @@ namespace app
         world::SidecarRegistry mSidecars;
         world::BlockIdTable mIdTable;
         std::unique_ptr<world::PrototypeIdTable> mPrototypeIds;
+        std::unique_ptr<world::WorldState> mWorldState;
+        world::MemoryPersistenceSink mPersistenceSink;
         config::ContentRoot mContentRoot;
         worldgen::WorldGenConfig mGenConfig;
         std::unique_ptr<worldgen::WorldGen> mWorldGen;

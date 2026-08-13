@@ -125,14 +125,18 @@ TEST_CASE( sidecar_entries_iterate_in_ascending_local_index_order )
 TEST_CASE( chunk_has_no_orientation_sidecar_until_first_set )
 {
     world::Chunk chunk( world::ChunkAddress{} );
-    CHECK( chunk.orientationSidecar() == nullptr );
-    CHECK( !chunk.blockOrientation( 1, 2, 3 ).has_value() );
+    const std::uint32_t localIndex = world::blockIndex( { 1, 2, 3 } );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
+    CHECK( !chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ).has_value() );
 
     chunk.setBlock( 1, 2, 3, 7u );
-    CHECK( chunk.setBlockOrientation( 1, 2, 3, world::BlockOrientation::East ) );
-    CHECK( chunk.orientationSidecar() != nullptr );
-    CHECK( chunk.blockOrientation( 1, 2, 3 ) == world::BlockOrientation::East );
-    CHECK( !chunk.blockOrientation( 1, 2, 4 ).has_value() );
+    const world::PropertyValue up{ world::blockOrientationValue( world::BlockOrientation::Up ) };
+    const world::PropertyValue east{ world::blockOrientationValue( world::BlockOrientation::East ) };
+    CHECK( chunk.setProperty( localIndex, world::CORE_ORIENTATION_SIDECAR, east, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) != nullptr );
+    CHECK( chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ) == east );
+    CHECK( !chunk.getProperty( world::blockIndex( { 1, 2, 4 } ),
+                               world::CORE_ORIENTATION_SIDECAR ).has_value() );
 }
 
 TEST_CASE( chunk_sidecar_disappears_again_after_last_default_write )
@@ -140,19 +144,24 @@ TEST_CASE( chunk_sidecar_disappears_again_after_last_default_write )
     world::Chunk chunk( world::ChunkAddress{} );
     chunk.setBlock( 1, 2, 3, 7u );
     chunk.setBlock( 4, 5, 6, 8u );
-    CHECK( chunk.setBlockOrientation( 1, 2, 3, world::BlockOrientation::East ) );
-    CHECK( chunk.setBlockOrientation( 4, 5, 6, world::BlockOrientation::South ) );
-    CHECK( chunk.orientationSidecar() != nullptr );
+    const std::uint32_t first = world::blockIndex( { 1, 2, 3 } );
+    const std::uint32_t second = world::blockIndex( { 4, 5, 6 } );
+    const world::PropertyValue up{ world::blockOrientationValue( world::BlockOrientation::Up ) };
+    const world::PropertyValue east{ world::blockOrientationValue( world::BlockOrientation::East ) };
+    const world::PropertyValue south{ world::blockOrientationValue( world::BlockOrientation::South ) };
+    CHECK( chunk.setProperty( first, world::CORE_ORIENTATION_SIDECAR, east, up ) );
+    CHECK( chunk.setProperty( second, world::CORE_ORIENTATION_SIDECAR, south, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) != nullptr );
 
-    CHECK( chunk.setBlockOrientation( 1, 2, 3, world::BlockOrientation::Up ) );
-    CHECK( chunk.orientationSidecar() != nullptr ); // one entry left
+    CHECK( chunk.setProperty( first, world::CORE_ORIENTATION_SIDECAR, up, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) != nullptr ); // one entry left
 
-    CHECK( chunk.setBlockOrientation( 4, 5, 6, world::BlockOrientation::Up ) );
-    CHECK( chunk.orientationSidecar() == nullptr ); // sidecar dropped again
+    CHECK( chunk.setProperty( second, world::CORE_ORIENTATION_SIDECAR, up, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr ); // dropped again
 
-    chunk.setBlockOrientation( 4, 5, 6, world::BlockOrientation::South );
-    chunk.clearOrientations();
-    CHECK( chunk.orientationSidecar() == nullptr );
+    chunk.setProperty( second, world::CORE_ORIENTATION_SIDECAR, south, up );
+    CHECK( chunk.clearProperty( world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
 }
 
 TEST_CASE( chunk_manager_orientation_roundtrip )
@@ -192,46 +201,55 @@ TEST_CASE( chunk_manager_orientation_never_creates_chunks )
 TEST_CASE( chunk_rejects_orientation_on_air_block )
 {
     world::Chunk chunk( world::ChunkAddress{} );
-    CHECK( !chunk.setBlockOrientation( 1, 2, 3, world::BlockOrientation::East ) );
-    CHECK( chunk.orientationSidecar() == nullptr );
-    CHECK( !chunk.blockOrientation( 1, 2, 3 ).has_value() );
+    const std::uint32_t localIndex = world::blockIndex( { 1, 2, 3 } );
+    const world::PropertyValue up{ world::blockOrientationValue( world::BlockOrientation::Up ) };
+    const world::PropertyValue east{ world::blockOrientationValue( world::BlockOrientation::East ) };
+    CHECK( !chunk.setProperty( localIndex, world::CORE_ORIENTATION_SIDECAR, east, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
+    CHECK( !chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ).has_value() );
 
     chunk.setBlock( 1, 2, 3, 7u );
-    CHECK( chunk.setBlockOrientation( 1, 2, 3, world::BlockOrientation::East ) );
-    CHECK( chunk.orientationSidecar() != nullptr );
+    CHECK( chunk.setProperty( localIndex, world::CORE_ORIENTATION_SIDECAR, east, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) != nullptr );
 
     chunk.setBlock( 1, 2, 3, 0u ); // back to AIR
-    CHECK( chunk.orientationSidecar() == nullptr );
-    CHECK( !chunk.blockOrientation( 1, 2, 3 ).has_value() );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
+    CHECK( !chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ).has_value() );
 }
 
 TEST_CASE( chunk_set_block_clears_stale_orientation )
 {
     world::Chunk chunk( world::ChunkAddress{} );
     chunk.setBlock( 2, 2, 2, 7u );
-    CHECK( chunk.setBlockOrientation( 2, 2, 2, world::BlockOrientation::South ) );
-    CHECK( chunk.blockOrientation( 2, 2, 2 ) == world::BlockOrientation::South );
+    const std::uint32_t localIndex = world::blockIndex( { 2, 2, 2 } );
+    const world::PropertyValue up{ world::blockOrientationValue( world::BlockOrientation::Up ) };
+    const world::PropertyValue south{ world::blockOrientationValue( world::BlockOrientation::South ) };
+    CHECK( chunk.setProperty( localIndex, world::CORE_ORIENTATION_SIDECAR, south, up ) );
+    CHECK( chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ) == south );
 
     chunk.setBlock( 2, 2, 2, 8u ); // replacement must invalidate orientation
-    CHECK( !chunk.blockOrientation( 2, 2, 2 ).has_value() );
-    CHECK( chunk.orientationSidecar() == nullptr );
+    CHECK( !chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ).has_value() );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
 
     chunk.setBlock( 2, 2, 2, 8u ); // same id again: no change, still no sidecar
-    CHECK( chunk.orientationSidecar() == nullptr );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
 }
 
 TEST_CASE( chunk_assign_blocks_invalidates_orientations )
 {
     world::Chunk chunk( world::ChunkAddress{} );
     chunk.setBlock( 1, 1, 1, 7u );
-    CHECK( chunk.setBlockOrientation( 1, 1, 1, world::BlockOrientation::West ) );
-    CHECK( chunk.orientationSidecar() != nullptr );
+    const std::uint32_t localIndex = world::blockIndex( { 1, 1, 1 } );
+    const world::PropertyValue up{ world::blockOrientationValue( world::BlockOrientation::Up ) };
+    const world::PropertyValue west{ world::blockOrientationValue( world::BlockOrientation::West ) };
+    CHECK( chunk.setProperty( localIndex, world::CORE_ORIENTATION_SIDECAR, west, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) != nullptr );
 
     std::array<std::uint16_t, world::Chunk::VOLUME> blocks{};
     blocks[0] = 3u;
     chunk.assignBlocks( blocks );
-    CHECK( chunk.orientationSidecar() == nullptr );
-    CHECK( !chunk.blockOrientation( 1, 1, 1 ).has_value() );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
+    CHECK( !chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ).has_value() );
 }
 
 TEST_CASE( chunk_manager_set_block_air_clears_orientation )

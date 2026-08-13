@@ -84,16 +84,36 @@ temperature/damage/power later), created lazily on first non-default write and
 dropped when the last entry returns to default (issue #3, section 5). A block
 becomes *hot* only when it needs frequent simulation - enTT projection comes
 in M08 and is explicitly not the world, just the active runtime cache. The
-unified world-state API (M05) will hide which layer a property lives in.
+unified world-state API (M05) hides which layer a property lives in.
 
 Sidecar state is strictly subordinated to the voxel it belongs to: state is
 only written for positions whose block actually needs it (orientation writes
 to AIR are rejected), and replacing a block — including by AIR — clears its
 stale sidecar entries. No zombie sidecar state survives a block change, so a
-warm block can always fall back to cold without leaking state. The registry is
-data-driven, but no per-field sidecar members are hardcoded into Chunk: M05
-replaces the hardwired pilot with the registry-driven resolver that stores
-values for any declared sidecar type.
+warm block can always fall back to cold without leaking state.
+
+### Unified world state (M05)
+
+`world::WorldState` (src/world/state/) is the single game-facing entry point
+for block and block-property state — the hard rule is that callers (Lua/game
+code) never know whether a value comes from a prototype/sidecar default or
+from stored sidecar state. It resolves `get()`/`has()`/`set()` by data-driven
+property id against the `SidecarRegistry`: absent or unloaded chunks answer
+`get()` with the type's declared default, unknown ids and type-mismatched
+values are rejected, and writes never create chunks. Stored state is kept in
+the generic per-chunk sidecar storage (registry-driven since M05, no
+hardcoded sidecar members in Chunk).
+
+Mutations are centralised: gameplay code places blocks through
+`WorldState::setBlock` (ChunkManager's `setBlock` returns whether the block
+actually changed, so no-ops are never dirty). `WorldState` fires granular
+change hooks (`what` = `"block"` or the property id) and feeds a
+`PersistenceSink` abstraction — dirty-chunk and last-write-wins delta records
+today (`MemoryPersistenceSink`), RocksDB backend in M09. Worldgen base load
+(`assignBlocks` via the streaming manager) stays outside the unified mutation
+path; it is not a gameplay mutation. The orientation pilot shims on
+ChunkManager read and write exactly the same `core:orientation` sidecar as the
+unified world state.
 
 ## Main loop
 

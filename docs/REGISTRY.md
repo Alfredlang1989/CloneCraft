@@ -170,24 +170,38 @@ changed, so callers can skip dirty/change notifications for no-ops; writes
 outside the configured capacity (`Chunk::VOLUME` on the chunk path) are
 rejected, closing the future deserialization trap (M09). `BlockOrientation`
 (Up/Down/North/South/East/West; `bitWidth: 3` is a serialization/storage hint,
-the pilot's physical storage is a sparse map entry) is the first pilot type
-via `OrientationSidecar`. Chunk owns the sidecar lazily: no orientation
-sidecar exists until the first non-default orientation is set, and the sidecar
-is dropped again once the last entry returns to default. `ChunkManager` passes
-orientation through by `BlockAddress` and never creates chunks for sidecar
-state.
+the pilot's physical storage is a sparse map entry) is the pilot type; the
+chunk stores it (like every sidecar type) as a generic `PropertyValue` sidecar
+keyed by the data-driven id `core:orientation`
+(`world::CORE_ORIENTATION_SIDECAR`). No per-type members are added to Chunk
+(M04 review constraint).
 
 Lifecycle invariant (issue #3, section 5): sidecar state may exist only for
-positions whose block actually needs it. In the pilot, orientation writes to
-AIR blocks are rejected, and replacing a block (including by AIR) or
-`assignBlocks` wholesale content replacement clears the stale entries — no
-zombie orientation survives a block change.
+positions whose block actually needs it. Orientation writes to AIR blocks are
+rejected, and replacing a block (including by AIR) or `assignBlocks` wholesale
+content replacement clears the stale entries — no zombie sidecar state
+survives a block change. The lazy-destruction invariant holds for every type:
+once the last non-default entry returns to its default, the sidecar is dropped
+again.
 
-Note on scope: the registry is data-driven, but the M04 *runtime* pilot is
-hardwired to `core:orientation` (`OrientationSidecar` in Chunk). Registering
-an arbitrary mod sidecar (`foo:radioactivity`) currently yields metadata
-only; the registry-driven resolver that stores values for any declared type
-arrives with M05. No per-field `unique_ptr` members are added to Chunk.
+### Registry-driven resolver (M05)
+
+M05 delivers the registry-driven resolver as the unified world state
+(`src/world/state/WorldState.h`): game code calls `has()`/`get()`/`set()` by
+*any* declared sidecar id — not just `core:orientation` — and never learns
+whether a value comes from a stored sidecar entry or from the type's
+data-driven default. `get()` falls back to `SidecarDef::defaultValue` (an
+absent or unloaded chunk still answers with its declared default; only unknown
+ids return `nullopt`), `has()` reports whether explicit stored state exists,
+and `set()` rejects unknown ids, type-mismatched values and AIR positions and
+never creates chunks. Writes of the declared default remove the stored entry
+again. `WorldState` is also the single central block-mutation entry point
+(`setBlock`) with granular change hooks (`what` = `"block"` or the property
+id) and a `PersistenceSink` abstraction (M09 implements the RocksDB backend;
+the reference `MemoryPersistenceSink` records dirty chunks and last-write-wins
+deltas). ChunkManager keeps `setBlockOrientation`/`blockOrientation` as
+convenience shims over the generic `core:orientation` sidecar — the shim and
+the unified world state read and write the exact same storage.
 
 ## prototypes.json
 

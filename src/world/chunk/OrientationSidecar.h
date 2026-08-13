@@ -3,6 +3,7 @@
 #include "world/chunk/Sidecar.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace world
 {
@@ -21,7 +22,24 @@ namespace world
         West = 5
     };
 
-    /** Sparse per-chunk orientation storage; default orientation is Up. */
+    /** Numeric value of an orientation for the "core:orientation" sidecar. */
+    inline constexpr std::uint32_t blockOrientationValue( BlockOrientation orientation )
+    {
+        return static_cast<std::uint32_t>( orientation );
+    }
+
+    /** Decodes a stored sidecar value; nullopt for invalid encodings. */
+    inline std::optional<BlockOrientation> blockOrientationFromValue( std::uint32_t value )
+    {
+        if( value > static_cast<std::uint32_t>( BlockOrientation::West ) )
+            return std::nullopt;
+        return static_cast<BlockOrientation>( value );
+    }
+
+    /** Sparse per-chunk orientation storage; default orientation is Up.
+     *  Test/typed face of the generic sidecar framework: since M05 the chunk
+     *  itself stores PropertyValue sidecars, this typed wrapper is used by
+     *  tests and the ChunkManager orientation shim. */
     class OrientationSidecar : public Sidecar<BlockOrientation>
     {
     public:

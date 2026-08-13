@@ -69,11 +69,11 @@ namespace world
         return tryBlockAt( b ).value_or( 0u );
     }
 
-    void ChunkManager::setBlock( const BlockAddress &b, std::uint16_t blockId )
+    bool ChunkManager::setBlock( const BlockAddress &b, std::uint16_t blockId )
     {
         Chunk *chunk = getOrCreateChunk( b.chunk );
         const std::uint16_t previous = chunk->block( b.block.x, b.block.y, b.block.z );
-        if( previous == blockId ) return;
+        if( previous == blockId ) return false;
         chunk->setBlock( b.block.x, b.block.y, b.block.z, blockId );
         notifyChange( b.chunk );
 
@@ -85,43 +85,76 @@ namespace world
         if( b.block.y == edge && tryOffsetChunk( b.chunk, 0, 1, 0, n ) ) notifyChange( n );
         if( b.block.z == 0 && tryOffsetChunk( b.chunk, 0, 0, -1, n ) ) notifyChange( n );
         if( b.block.z == edge && tryOffsetChunk( b.chunk, 0, 0, 1, n ) ) notifyChange( n );
+        return true;
     }
 
-    bool ChunkManager::setBlockOrientation( const BlockAddress &b, BlockOrientation orientation )
+    bool ChunkManager::setBlockProperty( const BlockAddress &b, const std::string &typeId,
+                                         const PropertyValue &value,
+                                         const PropertyValue &defaultValue )
     {
         Chunk *chunk = chunkAt( b.chunk );
         if( !chunk )
             return false; // absent chunk: no sidecar to mutate
         const bool changed =
-            chunk->setBlockOrientation( b.block.x, b.block.y, b.block.z, orientation );
+            chunk->setProperty( blockIndex( b.block ), typeId, value, defaultValue );
         if( changed )
             notifyChange( b.chunk );
         return changed;
     }
 
-    std::optional<BlockOrientation> ChunkManager::blockOrientation( const BlockAddress &b ) const
+    std::optional<PropertyValue> ChunkManager::blockProperty( const BlockAddress &b,
+                                                              const std::string &typeId ) const
     {
         const Chunk *chunk = chunkAt( b.chunk );
         if( !chunk )
             return std::nullopt;
-        return chunk->blockOrientation( b.block.x, b.block.y, b.block.z );
+        return chunk->getProperty( blockIndex( b.block ), typeId );
     }
 
-    const OrientationSidecar *ChunkManager::chunkOrientationSidecar( const ChunkAddress &a ) const
+    const Sidecar<PropertyValue> *ChunkManager::chunkPropertySidecar(
+        const ChunkAddress &a, const std::string &typeId ) const
     {
         const Chunk *chunk = chunkAt( a );
-        return chunk ? chunk->orientationSidecar() : nullptr;
+        return chunk ? chunk->propertySidecar( typeId ) : nullptr;
+    }
+
+    bool ChunkManager::clearChunkProperty( const ChunkAddress &a, const std::string &typeId )
+    {
+        Chunk *chunk = chunkAt( a );
+        if( !chunk )
+            return false;
+        if( !chunk->clearProperty( typeId ) )
+            return false; // nothing to clear: no state change
+        notifyChange( a );
+        return true;
+    }
+
+    // -- Orientation pilot shim over the generic sidecar path ---------------
+
+    bool ChunkManager::setBlockOrientation( const BlockAddress &b, BlockOrientation orientation )
+    {
+        return setBlockProperty( b, CORE_ORIENTATION_SIDECAR,
+                                 PropertyValue{ blockOrientationValue( orientation ) },
+                                 PropertyValue{ blockOrientationValue( BlockOrientation::Up ) } );
+    }
+
+    std::optional<BlockOrientation> ChunkManager::blockOrientation( const BlockAddress &b ) const
+    {
+        const std::optional<PropertyValue> stored = blockProperty( b, CORE_ORIENTATION_SIDECAR );
+        if( !stored || !std::holds_alternative<std::uint32_t>( *stored ) )
+            return std::nullopt;
+        return blockOrientationFromValue( std::get<std::uint32_t>( *stored ) );
+    }
+
+    const Sidecar<PropertyValue> *ChunkManager::chunkOrientationSidecar(
+        const ChunkAddress &a ) const
+    {
+        return chunkPropertySidecar( a, CORE_ORIENTATION_SIDECAR );
     }
 
     void ChunkManager::clearChunkOrientations( const ChunkAddress &a )
     {
-        Chunk *chunk = chunkAt( a );
-        if( !chunk )
-            return;
-        if( !chunk->orientationSidecar() )
-            return; // nothing to clear: no state change
-        chunk->clearOrientations();
-        notifyChange( a );
+        (void)clearChunkProperty( a, CORE_ORIENTATION_SIDECAR );
     }
 
     std::size_t ChunkManager::chunkCount() const
