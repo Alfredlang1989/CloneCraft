@@ -57,6 +57,24 @@
             "terrainMaskField": "rolling_hills_mask"
         },
         {
+            "id": "core:savanna",
+            "displayName": "Savanna",
+            "surfaceBlock": "core:grass",
+            "fillerBlock": "core:dirt",
+            "temperature": 0.76,
+            "rainfall": 0.38,
+            "continentalness": 0.52,
+            "weight": 1.8,
+            "terrain": {
+                "heightOffset": 4.0,
+                "heightMultiplier": 1.02,
+                "detailAmplitude": 3.0,
+                "detailScale": 0.018,
+                "detailMultiplier": 0.9
+            },
+            "terrainMaskField": "savanna_mask"
+        },
+        {
             "id": "core:desert",
             "displayName": "Desert",
             "surfaceBlock": "core:sand",

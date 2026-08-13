@@ -60,6 +60,13 @@
             "salt": 1000
         },
         {
+            "id": "savanna_mask",
+            "dimension": "2d",
+            "script": "worldgen/savanna_mask.lua",
+            "function": "sample",
+            "salt": 1000
+        },
+        {
             "id": "badlands_mask",
             "dimension": "2d",
             "script": "worldgen/badlands_mask.lua",
@@ -70,6 +77,13 @@
             "id": "alpine_mask",
             "dimension": "2d",
             "script": "worldgen/alpine_mask.lua",
+            "function": "sample",
+            "salt": 1000
+        },
+        {
+            "id": "massif_mask",
+            "dimension": "2d",
+            "script": "worldgen/massif_mask.lua",
             "function": "sample",
             "salt": 1000
         },
@@ -290,7 +304,7 @@
                 "value": 0.68
             },
             "replaceTags": [
-                "terrain:rock"
+                "terrain":rock"
             ]
         },
         {
@@ -305,7 +319,7 @@
             "maskField": "badlands_mask",
             "maskCondition": {
                 "op": "gt",
-                "value": 0.1
+                "value": 0.45
             },
             "replaceTags": [
                 "terrain:rock",
@@ -325,7 +339,7 @@
             "maskField": "desert_mask",
             "maskCondition": {
                 "op": "gt",
-                "value": 0.1
+                "value": 0.35
             },
             "replaceTags": [
                 "terrain:rock",
@@ -344,7 +358,7 @@
             "maskField": "badlands_mask",
             "maskCondition": {
                 "op": "gt",
-                "value": 0.1
+                "value": 0.45
             },
             "replaceTags": [
                 "terrain:rock",
@@ -363,10 +377,10 @@
             "maskField": "desert_mask",
             "maskCondition": {
                 "op": "gt",
-                "value": 0.1
+                "value": 0.35
             },
             "replaceTags": [
-                "terrain:rock",
+                "terrain":rock",
                 "terrain:soil",
                 "terrain:sediment"
             ]
@@ -404,7 +418,7 @@
                 "value": 0.5
             },
             "replaceTags": [
-                "terrain:rock",
+                "terrain":rock",
                 "terrain:soil",
                 "terrain:sediment",
                 "terrain:snow"
@@ -424,7 +438,7 @@
                 "value": 0.57
             },
             "replaceTags": [
-                "terrain:rock",
+                "terrain":rock",
                 "terrain:soil",
                 "terrain:sediment",
                 "terrain:snow"
@@ -442,7 +456,7 @@
             "maskField": "desert_high_mountains_mask",
             "maskCondition": {
                 "op": "gt",
-                "value": 0.08
+                "value": 0.4
             },
             "replaceTags": [
                 "terrain:rock",
@@ -462,7 +476,7 @@
             "maskField": "desert_high_mountains_mask",
             "maskCondition": {
                 "op": "gt",
-                "value": 0.08
+                "value": 0.4
             },
             "replaceTags": [
                 "terrain:rock",
@@ -483,7 +497,7 @@
                 "value": 0.165
             },
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":carvable"
             ]
         },
         {
@@ -500,7 +514,7 @@
                 "value": 0.11
             },
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":carvable"
             ]
         },
         {
@@ -514,10 +528,10 @@
             "maskField": "river_tunnel_mask",
             "maskCondition": {
                 "op": "lt",
-                "value": 0.052
+                "value": 0.11
             },
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":carvable"
             ]
         },
         {
@@ -525,16 +539,16 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:air",
-            "priority": 114,
+            "priority": 116,
             "surfaceField": "river_tunnel_ceiling_middle",
             "thicknessField": "river_tunnel_ceiling_middle",
             "maskField": "river_tunnel_mask",
             "maskCondition": {
                 "op": "lt",
-                "value": 0.042
+                "value": 0.09
             },
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":carvable"
             ]
         },
         {
@@ -542,16 +556,16 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:air",
-            "priority": 115,
+            "priority": 119,
             "surfaceField": "river_tunnel_ceiling_inner",
             "thicknessField": "river_tunnel_ceiling_inner",
             "maskField": "river_tunnel_mask",
             "maskCondition": {
                 "op": "lt",
-                "value": 0.032
+                "value": 0.07
             },
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":carvable"
             ]
         },
         {
@@ -559,16 +573,16 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:air",
-            "priority": 116,
+            "priority": 122,
             "surfaceField": "river_tunnel_ceiling_center",
             "thicknessField": "river_tunnel_ceiling_center",
             "maskField": "river_tunnel_mask",
             "maskCondition": {
                 "op": "lt",
-                "value": 0.024
+                "value": 0.05
             },
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":carvable"
             ]
         },
         {
@@ -576,13 +590,13 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:dirt",
-            "priority": 117,
+            "priority": 130,
             "surfaceField": "river_bed_surface",
-            "thickness": 7,
-            "maskField": "river_mask",
+            "thickness": 8,
+            "maskField": "river_valley_mask",
             "maskCondition": {
                 "op": "lt",
-                "value": 0.03
+                "value": 0.045
             },
             "replaceBlocks": [
                 "core:air"
@@ -592,18 +606,17 @@
             ]
         },
         {
-            "id": "river_bank_foundation",
+            "id": "river_banjﬂfoundation",
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:dirt",
-            "priority": 117,
+            "priority": 132,
             "surfaceField": "river_bank_surface",
-            "thickness": 4,
+            "thickness": 5,
             "maskField": "river_valley_mask",
             "maskCondition": {
-                "op": "between",
-                "value": 0.03,
-                "max": 0.064
+                "op": "lt",
+                "value": 0.065
             },
             "replaceBlocks": [
                 "core:air"
@@ -617,19 +630,17 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:sand",
-            "priority": 118,
+            "priority": 140,
             "surfaceField": "river_bed_surface",
             "thickness": 2,
             "maskField": "river_bed_sand_mask",
             "maskCondition": {
-                "op": "lt",
-                "value": 0.03
+                "op": "gt",
+                "value": 0.45
             },
-            "replaceBlocks": [
-                "core:air"
-            ],
             "replaceTags": [
-                "terrain:carvable"
+                "terrain:soil",
+                "terrain_sediment"
             ]
         },
         {
@@ -637,19 +648,17 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:clay",
-            "priority": 119,
+            "priority": 142,
             "surfaceField": "river_bed_surface",
             "thickness": 2,
             "maskField": "river_bed_clay_mask",
             "maskCondition": {
-                "op": "lt",
-                "value": 0.03
+                "op": "gt",
+                "value": 0.45
             },
-            "replaceBlocks": [
-                "core:air"
-            ],
             "replaceTags": [
-                "terrain:carvable"
+                "terrain:soil",
+                "terrain_sediment"
             ]
         },
         {
@@ -657,19 +666,17 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:gravel",
-            "priority": 120,
+            "priority": 144,
             "surfaceField": "river_bed_surface",
-            "thickness": 2,
+            "thickness": 3,
             "maskField": "river_bed_gravel_mask",
             "maskCondition": {
-                "op": "lt",
-                "value": 0.03
+                "op": "gt",
+                "value": 0.45
             },
-            "replaceBlocks": [
-                "core:air"
-            ],
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":soil",
+                "terrain_sediment"
             ]
         },
         {
@@ -677,20 +684,17 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:sand",
-            "priority": 121,
+            "priority": 146,
             "surfaceField": "river_bank_surface",
             "thickness": 2,
             "maskField": "river_bank_sand_mask",
             "maskCondition": {
-                "op": "between",
-                "value": 0.03,
-                "max": 0.064
+                "op": "gt",
+                "value": 0.55
             },
-            "replaceBlocks": [
-                "core:air"
-            ],
             "replaceTags": [
-                "terrain:carvable"
+                "terrain:soil",
+                "terrain_sediment"
             ]
         },
         {
@@ -698,20 +702,17 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:clay",
-            "priority": 122,
+            "priority": 148,
             "surfaceField": "river_bank_surface",
             "thickness": 2,
             "maskField": "river_bank_clay_mask",
             "maskCondition": {
-                "op": "between",
-                "value": 0.03,
-                "max": 0.064
+                "op": "gt",
+                "value": 0.55
             },
-            "replaceBlocks": [
-                "core:air"
-            ],
             "replaceTags": [
-                "terrain:carvable"
+                "terrain":soil",
+                "terrain_sediment"
             ]
         },
         {
@@ -719,7 +720,7 @@
             "type": "surface_layer",
             "stage": "addon",
             "block": "core:water",
-            "priority": 124,
+            "priority": 160,
             "surfaceField": "river_level",
             "bottomField": "river_water_bottom",
             "maskField": "river_mask",
@@ -729,9 +730,6 @@
             },
             "replaceBlocks": [
                 "core:air"
-            ],
-            "replaceTags": [
-                "terrain:carvable"
             ]
         }
     ],
@@ -739,29 +737,30 @@
         {
             "id": "ground_cover",
             "surfaceField": "surface_height",
-            "spacing": 1,
-            "chance": 0.34,
+            "densityField": "forest_mask",
+            "spacing": 4,
+            "chance": 0.72,
             "salt": 10001,
             "conditions": [
                 {
                     "field": "river_mask",
                     "op": "gt",
-                    "value": 0.06
+                    "value": 0.05
                 },
                 {
                     "field": "desert_mask",
                     "op": "lt",
-                    "value": 0.28
+                    "value": 0.2
                 },
                 {
                     "field": "badlands_mask",
                     "op": "lt",
-                    "value": 0.42
+                    "value": 0.3
                 },
                 {
                     "field": "alpine_mask",
                     "op": "lt",
-                    "value": 0.48
+                    "value": 0.32
                 }
             ],
             "surfaceMode": "postprocess",
@@ -770,8 +769,9 @@
         {
             "id": "meadow_flowers",
             "surfaceField": "surface_height",
-            "spacing": 3,
-            "chance": 0.44,
+            "densityField": "forest_mask",
+            "spacing": 7,
+            "chance": 0.54,
             "salt": 10002,
             "conditions": [
                 {
@@ -865,7 +865,7 @@
                 "core:air"
             ],
             "supportTags": [
-                "terrain:soil"
+                "terrain":soil"
             ]
         },
         {
@@ -881,7 +881,7 @@
                 "core:tall_grass"
             ],
             "supportTags": [
-                "terrain:soil"
+                "terrain":soil"
             ]
         },
         {
@@ -990,54 +990,4 @@
                 "maxX": 5,
                 "minY": 0,
                 "maxY": 14,
-                "minZ": -5,
-                "maxZ": 5
-            },
-            "palette": [
-                "core:oak_log"
-            ],
-            "anchorMin": 0.0,
-            "anchorMax": 0.72,
-            "replaceBlocks": [
-                "core:air",
-                "core:tall_grass",
-                "core:dandelion",
-                "core:poppy",
-                "core:sugar_cane",
-                "core:oak_leaves",
-                "core:birch_leaves"
-            ]
-        },
-        {
-            "id": "birch_wood",
-            "type": "structure",
-            "anchorSet": "forest_trees",
-            "priority": 230,
-            "script": "worldgen/decor/birch_tree.lua",
-            "function": "wood",
-            "salt": 11002,
-            "bounds": {
-                "minX": -3,
-                "maxX": 3,
-                "minY": 0,
-                "maxY": 13,
-                "minZ": -3,
-                "maxZ": 3
-            },
-            "palette": [
-                "core:birch_log"
-            ],
-            "anchorMin": 0.72,
-            "anchorMax": 1.0,
-            "replaceBlocks": [
-                "core:air",
-                "core:tall_grass",
-                "core:dandelion",
-                "core:poppy",
-                "core:sugar_cane",
-                "core:oak_leaves",
-                "core:birch_leaves"
-            ]
-        }
-    ]
-}
+                "minZHéàMKàõX^àéàBàKàú[]Héà¬àò€‹ôNõÿZ◊€Ÿ»ÇàKàò[ò⁄‹ìZ[àéàåàò[ò⁄‹ìX^éàçÃãàúô\XŸPõÿ⁄‹»éà¬àò€‹ôNòZ\àãàò€‹ôNù[Ÿ‹ò\‹»ãàò€‹ôNô[ô[[€àãàò€‹ôNú‹Hãàò€‹ôNú›Yÿ\óÿÿ[ôHãàò€‹ôNõÿZ◊€X]ô\»ãàò€‹ôNòö\ò⁄€X]ô\»ÇàBàKà¬àöYéàòö\ò⁄›€€Ÿãàù\Héàú›ùX›\ôHãàò[ò⁄‹îŸ]éàôõ‹ô\››ôY\»ãàúö[‹ö]HéàåÃàúÿ‹ö\éàù€‹õŸ[ãŸX€‹ãÿö\ò⁄›ôYKõXHãàôù[ò›[€àéàù€€Ÿãàúÿ[éàLLãàòõ›[ô»éà¬àõZ[ñéàLÀàõX^éàÀàõZ[ñHéààõX^HéàLÀàõZ[ñá#¢”2¿¢&÷Ö¢#¢0¢“¿¢'∆WGFR#¢∞¢&6˜&S¶&ó&6Öˆ∆ˆr ¢“¿¢&Ê6Ü˜$÷ñ‚#¢„s"¿¢&Ê6Ü˜$÷Ç#¢„¿¢'&W∆6T&∆ˆ6∑2#¢∞¢&6˜&S¶ó""¿¢&6˜&SßF∆≈ˆw&72"¿¢&6˜&S¶FÊFV∆ñˆ‚"¿¢&6˜&Sß˜í"¿¢&6˜&Sß7Vv%ˆ6ÊR"¿¢&6˜&S¶ˆµˆ∆VfW2"¿¢&6˜&S¶&ó&6Öˆ∆VfW2 ¢–¢–¢–ß–
