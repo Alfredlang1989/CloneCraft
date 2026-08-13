@@ -777,4 +777,111 @@ namespace world
                          prototypesPath.string(), blocks, out );
         return true;
     }
+
+    void RegistryLoader::parseSidecars( const json &root, const std::string &source,
+                                        SidecarRegistry &out )
+    {
+        if( !root.is_object() || !root.contains( "sidecars" ) || !root["sidecars"].is_array() )
+            throw RegistryError( source + ": expected an object with a 'sidecars' array" );
+
+        static const char *const allowed[] = {
+            "id", "displayName", "valueType", "defaultValue", "bitWidth",
+            "storage", "persist", "serializationVersion"
+        };
+        const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
+
+        int index = 0;
+        for( const json &entry : root["sidecars"] )
+        {
+            ++index;
+            if( !entry.is_object() )
+                throw RegistryError( context( source, index ) + ": expected an object" );
+            checkUnknownFields( entry, source, index, allowed, allowedCount );
+
+            SidecarDef def;
+            def.id = requireString( entry, source, index, "id" );
+            if( !isNamespacedId( def.id ) )
+                throw RegistryError( context( source, index ) +
+                                     ": sidecar id '" + def.id +
+                                     "' must be namespaced as <namespace>:<name>" );
+            def.displayName = requireString( entry, source, index, "displayName" );
+
+            if( entry.contains( "valueType" ) )
+            {
+                if( !entry["valueType"].is_string() )
+                    throw RegistryError( context( source, index ) + ": 'valueType' must be a string" );
+                const std::string type = entry["valueType"].get<std::string>();
+                if( type == "uint8" ) def.valueType = SidecarValueType::Uint8;
+                else if( type == "uint16" ) def.valueType = SidecarValueType::Uint16;
+                else if( type == "uint32" ) def.valueType = SidecarValueType::Uint32;
+                else if( type == "float" ) def.valueType = SidecarValueType::Float;
+                else
+                    throw RegistryError( context( source, index ) +
+                                         ": 'valueType' must be 'uint8', 'uint16', 'uint32' or 'float'" );
+            }
+
+            if( entry.contains( "defaultValue" ) )
+            {
+                if( !entry["defaultValue"].is_number_unsigned() )
+                    throw RegistryError( context( source, index ) +
+                                         ": 'defaultValue' must be an unsigned integer" );
+                def.defaultValue = entry["defaultValue"].get<std::uint32_t>();
+            }
+
+            if( entry.contains( "bitWidth" ) )
+            {
+                if( !entry["bitWidth"].is_number_unsigned() )
+                    throw RegistryError( context( source, index ) + ": 'bitWidth' must be an unsigned integer" );
+                def.bitWidth = entry["bitWidth"].get<std::uint32_t>();
+                if( def.bitWidth == 0u || def.bitWidth > 32u )
+                    throw RegistryError( context( source, index ) + ": 'bitWidth' must be in 1..32" );
+            }
+
+            if( entry.contains( "storage" ) )
+            {
+                if( !entry["storage"].is_string() )
+                    throw RegistryError( context( source, index ) + ": 'storage' must be a string" );
+                const std::string storage = entry["storage"].get<std::string>();
+                if( storage == "sparse" ) def.storage = SidecarStorageStrategy::Sparse;
+                else if( storage == "dense" ) def.storage = SidecarStorageStrategy::Dense;
+                else
+                    throw RegistryError( context( source, index ) +
+                                         ": 'storage' must be 'sparse' or 'dense'" );
+            }
+
+            if( entry.contains( "persist" ) )
+            {
+                if( !entry["persist"].is_boolean() )
+                    throw RegistryError( context( source, index ) + ": 'persist' must be a boolean" );
+                def.persist = entry["persist"].get<bool>();
+            }
+
+            if( entry.contains( "serializationVersion" ) )
+            {
+                if( !entry["serializationVersion"].is_number_unsigned() )
+                    throw RegistryError( context( source, index ) +
+                                         ": 'serializationVersion' must be an unsigned integer" );
+                def.serializationVersion = entry["serializationVersion"].get<std::uint32_t>();
+                if( def.serializationVersion == 0u )
+                    throw RegistryError( context( source, index ) +
+                                         ": 'serializationVersion' must be >= 1" );
+            }
+
+            out.insert( def );
+        }
+    }
+
+    bool RegistryLoader::loadSidecars( const std::filesystem::path &dir,
+                                       SidecarRegistry &out )
+    {
+        const auto sidecarsPath = dir / "sidecars.json";
+        std::error_code error;
+        if( !std::filesystem::exists( sidecarsPath, error ) || error )
+            return false;
+
+        parseSidecars( parseJson( readTextFile( sidecarsPath, "sidecars.json" ),
+                                  sidecarsPath.string() ),
+                       sidecarsPath.string(), out );
+        return true;
+    }
 } // namespace world

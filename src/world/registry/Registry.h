@@ -185,6 +185,40 @@ namespace world
         std::vector<std::string> capabilities;
     };
 
+    /** Logical value schema of a data-driven sidecar type. */
+    enum class SidecarValueType : std::uint8_t
+    {
+        Uint8,
+        Uint16,
+        Uint32,
+        Float
+    };
+
+    /** Storage strategy of a sidecar type (issue #3, section 5.1). */
+    enum class SidecarStorageStrategy : std::uint8_t
+    {
+        Sparse,  // per-entry allocation, default is implicit
+        Dense    // one slot per block position (future)
+    };
+
+    /**
+     * Registered sidecar type (issue #3, section 5.1). Mods declare new
+     * sidecar types in sidecars.json; the optimized C++ storage per sidecar
+     * may differ from this metadata. The serialization version prepares the
+     * persistence layer (M09) without implementing it yet.
+     */
+    struct SidecarDef
+    {
+        std::string id;                    // stable namespaced id, e.g. "core:orientation"
+        std::string displayName;
+        SidecarValueType valueType = SidecarValueType::Uint8;
+        std::uint32_t defaultValue = 0;    // encoded default (e.g. 0 = Up for orientation)
+        std::uint32_t bitWidth = 0;        // optional compact encoding hint (0 = type default)
+        SidecarStorageStrategy storage = SidecarStorageStrategy::Sparse;
+        bool persist = true;               // persistence policy
+        std::uint32_t serializationVersion = 1;
+    };
+
     /**
      * Generic id-keyed registry with insertion order and strict
      * duplicates. Lookup is O(1); iteration is deterministic.
@@ -231,5 +265,6 @@ namespace world
     using BiomeRegistry = Registry<BiomeDef>;
     using ResourceRegistry = Registry<ResourceDef>;
     using PrototypeRegistry = Registry<PrototypeDef>;
+    using SidecarRegistry = Registry<SidecarDef>;
 
 } // namespace world

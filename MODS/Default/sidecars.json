@@ -1,0 +1,14 @@
+{
+    "sidecars": [
+        {
+            "id": "core:orientation",
+            "displayName": "Orientation",
+            "valueType": "uint8",
+            "defaultValue": 0,
+            "bitWidth": 3,
+            "storage": "sparse",
+            "persist": true,
+            "serializationVersion": 1
+        }
+    ]
+}

@@ -101,8 +101,10 @@ namespace app
             try {
                 world::RegistryLoader::loadPrototypes( mContentRoot.path, mBlocks, mPrototypes );
                 mPrototypeIds = std::make_unique<world::PrototypeIdTable>( mPrototypes );
+                world::RegistryLoader::loadSidecars( mContentRoot.path, mSidecars );
             } catch( const world::RegistryError &error ) { core::logError( std::string( "Prototype registry load failed: " ) + error.what() ); return false; }
-            core::logInfo( "Registered " + std::to_string( mPrototypes.size() ) + " prototype(s)" );
+            core::logInfo( "Registered " + std::to_string( mPrototypes.size() ) + " prototype(s) and " +
+                           std::to_string( mSidecars.size() ) + " sidecar type(s)" );
             try {
                 mGenConfig = worldgen::loadWorldGenConfig( mContentRoot.path / "worldgen.json" );
                 mWorldGen = std::make_unique<worldgen::WorldGen>( mGenConfig, mBlocks, mIdTable, mBiomes );

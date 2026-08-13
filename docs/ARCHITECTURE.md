@@ -75,6 +75,17 @@ load-order independent hashes (see `docs/REGISTRY.md` "Runtime prototype
 handles"). The renderer receives the resolved content path from
 Application and tolerates an empty one.
 
+### Hybrid block lifecycle: cold -> sidecar -> active ECS
+
+Blocks are never permanently classified as "voxel" or "entity" (issue #3,
+section 6). A block starts *cold* (voxel only). Blocks that need extra state
+become *warm*: the chunk holds one or more sparse sidecars (orientation today,
+temperature/damage/power later), created lazily on first non-default write and
+dropped when the last entry returns to default (issue #3, section 5). A block
+becomes *hot* only when it needs frequent simulation - enTT projection comes
+in M08 and is explicitly not the world, just the active runtime cache. The
+unified world-state API (M05) will hide which layer a property lives in.
+
 ## Main loop
 
     while (running) {

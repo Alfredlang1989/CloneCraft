@@ -1,10 +1,13 @@
 #pragma once
 
 #include "world/coordinates/Coords.h"
+#include "world/chunk/OrientationSidecar.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 
@@ -61,9 +64,43 @@ namespace world
         std::uint32_t nonAirCount() const { return mNonAirCount; }
         const std::array<std::uint16_t, VOLUME> &data() const { return mBlocks; }
 
+        // -- Sparse chunk sidecars (issue #3, section 5) ----------------------
+
+        /** Sets the block orientation. Writing the default (Up) removes the
+         *  entry; when the last entry disappears the sidecar is dropped. */
+        void setBlockOrientation( std::int64_t lx, std::int64_t ly, std::int64_t lz,
+                                  BlockOrientation orientation )
+        {
+            const std::uint32_t localIndex = blockIndex( { lx, ly, lz } );
+            if( !mOrientation )
+            {
+                if( orientation == BlockOrientation::Up )
+                    return; // default orientation: no sidecar needed at all
+                mOrientation = std::make_unique<OrientationSidecar>();
+            }
+            mOrientation->set( localIndex, orientation );
+            if( mOrientation->empty() )
+                mOrientation.reset();
+        }
+
+        /** Absent entry means the block has the default orientation (Up). */
+        std::optional<BlockOrientation> blockOrientation( std::int64_t lx, std::int64_t ly,
+                                                          std::int64_t lz ) const
+        {
+            if( !mOrientation )
+                return std::nullopt;
+            return mOrientation->get( blockIndex( { lx, ly, lz } ) );
+        }
+
+        /** nullptr while the chunk has no oriented blocks. */
+        const OrientationSidecar *orientationSidecar() const { return mOrientation.get(); }
+
+        void clearOrientations() { mOrientation.reset(); }
+
     private:
         ChunkAddress mAddress{};
         std::array<std::uint16_t, VOLUME> mBlocks{};
         std::uint32_t mNonAirCount = 0;
+        std::unique_ptr<OrientationSidecar> mOrientation; // lazy: exists only when needed
     };
 } // namespace world

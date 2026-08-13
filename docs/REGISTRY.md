@@ -132,6 +132,41 @@ Unknown fields, duplicates, wrong types/ranges and invalid cross-references fail
 with a message that includes source/entry context. JSON syntax is validated as
 part of the repair checks.
 
+## sidecars.json
+
+Sparse/optional per-chunk sidecars (issue #3, section 5): a sidecar exists only
+while at least one block in the chunk needs that data, and disappears again
+when the last entry returns to its default. Mods declare sidecar *types* in
+`sidecars.json`; the optimized C++ storage may vary per sidecar (section 5.1).
+The file is optional — a content root without sidecar types is legal.
+
+| Field | Type | Required | Default | Meaning |
+|---|---:|---:|---|---|
+| `id` | string | yes | - | namespaced sidecar id (`<namespace>:<name>`) |
+| `displayName` | string | yes | - | user-facing name |
+| `valueType` | string | no | `uint8` | `uint8` / `uint16` / `uint32` / `float` |
+| `defaultValue` | unsigned | no | 0 | encoded default value |
+| `bitWidth` | unsigned | no | 0 | compact encoding hint (1..32; 0 = type default) |
+| `storage` | string | no | `sparse` | `sparse` / `dense` |
+| `persist` | boolean | no | true | persistence policy |
+| `serializationVersion` | unsigned | no | 1 | sidecar payload version (>= 1) |
+
+Validation: duplicate ids, non-namespaced ids, unknown valueType/storage
+strings, out-of-range bitWidth/serializationVersion and unknown fields are
+rejected with source/entry context.
+
+### Runtime sidecar framework
+
+`world::Sidecar<T>` (src/world/chunk/Sidecar.h) is the generic sparse
+per-chunk store: empty until the first `set()`, entries removed when written
+back to the default, deterministic ascending local-index iteration for later
+serialization (M09). `BlockOrientation` (Up/Down/North/South/East/West, 3-bit
+encoding) is the first pilot type via `OrientationSidecar`. Chunk owns the
+sidecar lazily: no orientation sidecar exists until the first non-default
+orientation is set, and the sidecar is dropped again once the last entry
+returns to default. `ChunkManager` passes orientation through by
+`BlockAddress` and never creates chunks for sidecar state.
+
 ## prototypes.json
 
 Prototypes are the *logical* identity layer on top of physical block ids:

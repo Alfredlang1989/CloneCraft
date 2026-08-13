@@ -87,6 +87,38 @@ namespace world
         if( b.block.z == edge && tryOffsetChunk( b.chunk, 0, 0, 1, n ) ) notifyChange( n );
     }
 
+    void ChunkManager::setBlockOrientation( const BlockAddress &b, BlockOrientation orientation )
+    {
+        Chunk *chunk = chunkAt( b.chunk );
+        if( !chunk )
+            return; // absent chunk: no sidecar to mutate
+        chunk->setBlockOrientation( b.block.x, b.block.y, b.block.z, orientation );
+        notifyChange( b.chunk );
+    }
+
+    std::optional<BlockOrientation> ChunkManager::blockOrientation( const BlockAddress &b ) const
+    {
+        const Chunk *chunk = chunkAt( b.chunk );
+        if( !chunk )
+            return std::nullopt;
+        return chunk->blockOrientation( b.block.x, b.block.y, b.block.z );
+    }
+
+    const OrientationSidecar *ChunkManager::chunkOrientationSidecar( const ChunkAddress &a ) const
+    {
+        const Chunk *chunk = chunkAt( a );
+        return chunk ? chunk->orientationSidecar() : nullptr;
+    }
+
+    void ChunkManager::clearChunkOrientations( const ChunkAddress &a )
+    {
+        Chunk *chunk = chunkAt( a );
+        if( !chunk )
+            return;
+        chunk->clearOrientations();
+        notifyChange( a );
+    }
+
     std::size_t ChunkManager::chunkCount() const
     {
         std::size_t total = 0;

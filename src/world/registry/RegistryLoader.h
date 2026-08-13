@@ -59,6 +59,17 @@ namespace world
         static void parsePrototypes( const nlohmann::json &root, const std::string &source,
                                      const BlockRegistry &blocks, PrototypeRegistry &out );
 
+        /**
+         * Loads <dir>/sidecars.json into `out` when the file exists.
+         * Returns false when the file is absent (a content root without
+         * sidecar types is legal); throws RegistryError on any problem.
+         */
+        static bool loadSidecars( const std::filesystem::path &dir, SidecarRegistry &out );
+
+        /** Parses one already-read JSON document (used by tests). */
+        static void parseSidecars( const nlohmann::json &root, const std::string &source,
+                                   SidecarRegistry &out );
+
     private:
         static std::string requireString( const nlohmann::json &object,
                                           const std::string &source, int index,

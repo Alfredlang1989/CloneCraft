@@ -66,6 +66,7 @@ namespace app
         world::BiomeRegistry mBiomes;
         world::ResourceRegistry mResources;
         world::PrototypeRegistry mPrototypes;
+        world::SidecarRegistry mSidecars;
         world::BlockIdTable mIdTable;
         std::unique_ptr<world::PrototypeIdTable> mPrototypeIds;
         config::ContentRoot mContentRoot;

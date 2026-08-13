@@ -29,13 +29,21 @@
   (`core:cactus` block); `settings.json` gains the `mod` key; content moved
   `data/` -> `MODS/Default/`; ownership contract documented in
   `docs/ARCHITECTURE.md`. Suites: 18/18 PASS.
-- Core spine #3 (sidecars/world state/actions/events/enTT/RocksDB),
+- M04 — Sidecar pilot (#3): **done**. Generic `world::Sidecar<T>` framework
+  (lazy allocation, lazy destruction on default-write, deterministic
+  iteration), `BlockOrientation` pilot with lazy per-chunk `OrientationSidecar`
+  in Chunk/ChunkManager, data-driven `sidecars.json` registry
+  (`SidecarDef` with value schema, storage strategy, persistence policy and
+  serialization version), `core:orientation` (3-bit) in MODS/Default. Suites:
+  19/19 PASS.
+- Core spine #3 (world state/actions/events/enTT/RocksDB),
   #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
   #16/#17 (construction): **not started**.
 - Baseline gates at M00 time: architecture check PASS, clang-tidy/AST PASS,
   15/15 renderer-independent ctest suites PASS. At M02 time the same gates PASS
   with 16/16 suites (new `biome_distribution` suite). At M03 time 18/18 suites
-  (new `content_root` + `prototypes` suites).
+  (new `content_root` + `prototypes` suites). At M04 time 19/19 suites (new
+  `sidecars` suite).
 
 ## Current state
 

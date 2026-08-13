@@ -236,6 +236,12 @@ target_compile_definitions(test_prototypes PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CU
 target_link_libraries(test_prototypes PRIVATE omnigrid_registry)
 add_test(NAME prototypes COMMAND test_prototypes)
 
+add_executable(test_sidecars tests/TestSidecars.cpp)
+target_include_directories(test_sidecars PRIVATE src)
+target_compile_definitions(test_sidecars PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
+target_link_libraries(test_sidecars PRIVATE omnigrid_chunk)
+add_test(NAME sidecars COMMAND test_sidecars)
+
 add_executable(test_worldgen tests/TestWorldGen.cpp)
 target_include_directories(test_worldgen PRIVATE src)
 target_compile_definitions(test_worldgen PRIVATE

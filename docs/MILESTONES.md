@@ -66,10 +66,19 @@ Kept as history; the roadmap below replaces them as the current plan.
   suites `content_root` (6 cases) and `prototypes` (12 cases); gates PASS
   (18/18 ctest suites).
 
-- **M04 — #3 Sidecar Pilot ◻**
+- **M04 — #3 Sidecar Pilot ✔**
   Generic sidecar framework; lazy allocation; lazy destruction; orientation as
   first pilot; empty/occupied tests; serialization/version metadata prepared.
   Temperature/Damage only after the proven orientation pilot.
+  Status: done. `world::Sidecar<T>` sparse per-chunk store (lazy allocation,
+  default-write removes entries, deterministic ascending iteration for M09);
+  `BlockOrientation` (3-bit encoding) as first pilot via `OrientationSidecar`;
+  Chunk owns the sidecar lazily (no sidecar until first non-default write,
+  dropped again when the last entry returns to default); ChunkManager
+  orientation passthrough by BlockAddress without chunk creation; data-driven
+  `sidecars.json` (`SidecarDef`: valueType/defaultValue/bitWidth/storage/
+  persist/serializationVersion) with `core:orientation`; suites: `sidecars`
+  11 cases; gates PASS (19/19 ctest suites).
 
 - **M05 — #3 Unified World State ◻**
   `get` / `has` / `set`; prototype defaults; sidecar resolver; central block
