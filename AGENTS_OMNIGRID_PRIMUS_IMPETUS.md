@@ -6,7 +6,7 @@
 > **Leitregel:**  
 > **Kleinste generische Schicht bauen → an einem echten Verbraucher beweisen → testen → Architektur prüfen → AST prüfen → Dokumentation aktualisieren → Graphify aktualisieren → Git committen → GitHub dokumentieren → erst dann zum nächsten Milestone.**
 >
-> Kein zweiter World-State-Pfad. Kein zweites Eventsystem. Keine Subsystem-Datenbank. Kein Singleplayer-Sonderweg. Keine Mega-Refactors auf Vorrat.
+> Kein zweiter World-State-Pfad. Kein zweites Eventsystem. Keine getrennten Action-/Event-/Network-Message-Welten. Keine Subsystem-Datenbank. Kein Singleplayer-Sonderweg. Keine Mega-Refactors auf Vorrat.
 
 ---
 
@@ -32,6 +32,9 @@ Der Agent darf einen Milestone **nicht** als DONE melden, solange:
 - keine zweite World-State-API;
 - keine zweite Persistence-Architektur;
 - keine zweite Event-/Action-Architektur;
+- keine getrennte Network-Message-Semantik neben dem gemeinsamen Communication-Envelope;
+- kein öffentliches Busmodell nach dem Muster `event_id -> vector<callbacks>` als Ersatz für adressierbare Kommunikation;
+- keine rohen Funktionspointer/`std::function`-Callbacks im transportierbaren Nachrichtenvertrag;
 - keine subsystemeigene Datenbank;
 - kein direkter Input/UI → `ChunkManager::setBlock()`-Pfad;
 - kein direkter UI → ECS/Sidecar/RocksDB-Zugriff;
@@ -215,7 +218,8 @@ Aktualisieren bei:
 - Dependency-Änderungen;
 - neuen öffentlichen Abstraktionen;
 - neuen Client-/Server-/World-State-Grenzen;
-- neuen dauerhaft relevanten Datenflüssen.
+- neuen dauerhaft relevanten Datenflüssen;
+- Communication-Envelope-, Routing-, Reply-/Correlation- oder Transport-Verträgen.
 
 ## 4.5 `docs/DECISIONS.md`
 
@@ -598,17 +602,145 @@ Lua/Gamecode darf nicht wissen, ob ein Wert aus Prototype, Sidecar oder später 
 
 ---
 
-## M06 — #3 Minimal Actions + #18 Player Interaction
+## M06 — #3 Communication Foundation + Minimal Actions + #18 Player Interaction
 
-Minimal Actions:
+### Harte Kommunikationsarchitektur ab M06
+
+M06 beginnt **nicht** mit einem isolierten Action-System, das M07 oder M10 später durch einen anderen Bus ersetzt.
+
+Ab M06 gilt ein gemeinsamer transportierbarer Kommunikationsvertrag für:
+
+- Commands;
+- Queries;
+- Events;
+- Replies;
+- Input/Player Actions;
+- Lua;
+- UI;
+- Jolt/Physics;
+- interne Worker/Systeme;
+- später #13 Client/Server.
+
+Die öffentliche Semantik muss als First-Class-Nachrichtenobjekt modelliert werden, konzeptionell mindestens:
+
+```text
+CommunicationEnvelope
+{
+    message_id
+    kind            // Command | Query | Event | Reply
+
+    sender
+    receiver
+
+    context
+    action
+    target
+
+    payload
+
+    reply_to
+    correlation_id
+}
+```
+
+Zusätzliche Metadaten dürfen ergänzt werden, wenn sie einen klaren generischen Zweck besitzen, z. B. Trace-/Session-/Authorization-Kontext. Keine content-spezifischen Felder in den Core-Umschlag einbauen.
+
+### Feldsemantik
+
+`sender`
+
+- Identität des logischen Auslösers/Absenders;
+- nicht zwangsläufig identisch mit `target`;
+- muss für Logging, Rechte, Tracing und später Netzwerkbetrieb erhalten bleiben.
+
+`receiver`
+
+- konkretes System/Objekt **oder** logische Adresse/Capability/Scope;
+- muss gerichtete Kommunikation ermöglichen;
+- Broadcast ist ein Routingmodus, nicht der einzige Busmodus.
+
+`context`
+
+- semantischer Zusammenhang der Nachricht, z. B. `interaction`, `physics`, `inventory`, `simulation`;
+- als stabile namespaced ID definieren, Runtime-Mapping auf kompakte IDs erlaubt.
+
+`action`
+
+- Verb/Operation, z. B. `block.break`, `block.place`, `damage.apply`;
+- stabile namespaced ID, nicht C++-Enum aus Content-Namen;
+- `context + action` ergänzt die Semantik, ersetzt aber nicht die Registry-/Schema-Validierung.
+
+`target`
+
+- generische Zielreferenz;
+- für M06 mindestens kompatibel mit dem vorhandenen `WorldObjectRef` / `BlockAddress`;
+- später erweiterbar auf Entity/System/Inventory/Scope, ohne einen zweiten Bus einzuführen.
+
+`message_id`
+
+- eindeutige Identität einer Nachricht innerhalb des relevanten Runtime-/Session-Kontexts.
+
+`correlation_id`
+
+- verbindet Reply/Folgekommunikation mit der ursprünglichen Nachricht.
+
+`reply_to`
+
+- logische Antwortadresse;
+- darf **kein** roher C++-Funktionspointer sein.
+
+### Callback-Regel
+
+Ein bequemer InProcess-Aufruf wie:
+
+```text
+send(message, callback)
+```
+
+ist als lokaler Adapter zulässig.
+
+Der öffentliche/transportierbare Vertrag darf aber **keinen echten Funktionscallback voraussetzen**. Intern muss Callback-Semantik auf Reply/Correlation abbildbar bleiben.
+
+Grund:
+
+> Was in einer Binary funktioniert, muss später auch über Loopback, Netzwerk oder Worker-Grenzen transportierbar sein.
+
+Lua-`luaL_ref`-Handles aus #7 sind ebenfalls **lokale Runtime-Adapter** und niemals Teil des transportierbaren Communication-Envelopes.
+
+### Eine Semantik, mehrere Dispatch-Wege
+
+Performance-Optimierungen dürfen später unterschiedliche interne Dispatch-Wege besitzen:
+
+- direkter synchroner InProcess-Dispatch;
+- bounded Queue;
+- Worker Queue;
+- Loopback Transport;
+- Network Transport.
+
+Aber alle müssen denselben logischen Envelope und dieselben Action-/Signal-/Reply-Semantiken beobachten.
+
+**Transport ist Implementierung. Kommunikation ist Vertrag.**
+
+### Minimaler M06-Scope
+
+M06 implementiert nur so viel Communication Foundation, wie für zwei echte Commands nötig ist:
 
 - `place_block`;
 - `remove_block`;
+- `Command`-Kind;
+- Message ID;
+- Sender;
+- Receiver;
+- Context;
+- Action;
 - Target;
-- Payload;
-- Result;
-- Handler;
+- typed Payload;
+- Result/Reply-Grundlage;
+- Correlation-Grundlage;
+- Handler Registry;
 - Validation.
+
+Noch **kein** vollständiger Event-/Broadcast-Kosmos auf Vorrat.
 
 Dann #18:
 
@@ -626,34 +758,113 @@ Pflichtpfad:
 ```text
 Input
 -> Raycast
--> Action
+-> CommunicationEnvelope(kind=Command)
+-> Router/Handler
 -> World State
 -> Dirty/Invalidation
 -> sichtbare Änderung
+-> optional Reply mit correlation_id
 ```
 
-Wenn dafür Input direkt den ChunkManager mutieren muss:
+Pflichtbeweis M06:
+
+1. `place_block` und `remove_block` laufen als Commands durch denselben Envelope-Vertrag;
+2. Sender/Receiver/Context/Action/Target sind im Test beobachtbar;
+3. mindestens ein erfolgreicher und ein abgelehnter/ungültiger Command liefern ein Resultat über denselben Reply-/Result-Vertrag;
+4. kein Input-Code mutiert `ChunkManager` direkt;
+5. kein zweiter Spezialpfad für lokalen Singleplayer entsteht.
+
+Wenn dafür Input direkt den ChunkManager mutieren muss oder ein separater Action-Umschlag entsteht, der später nicht als Bus-/Network-Nachricht taugt:
 
 **STOP. #3 korrigieren.**
 
 ---
 
-## M07 — #3 Events + #7 Lua Callback Cache
+## M07 — #3 Communication Router / Events + #7 Lua Callback Cache
 
-#3:
+M07 **generalisiert exakt die M06-Communication-Foundation**. Kein zweites Event-Objekt neben dem M06-Command-Objekt einführen.
 
+### #3 Communication Router / Event semantics
+
+Erweitern um:
+
+- `Event`-Kind;
+- `Query`-Kind;
+- `Reply`-Kind vollständig;
 - Signal Registry;
-- Slot Registry;
+- Slot/Receiver Registry;
 - Action Registry generalisieren;
-- Payload Schemas;
-- Validation;
+- Context Registry/IDs soweit nötig;
+- typed Payload Schemas;
+- Load-/Dispatch-Time Validation;
 - Native Handler;
 - Lua Handler;
+- Receiver-/Capability-Routing;
+- gerichtete Nachrichten;
+- Broadcast/Spatial Scope als Routingmodus;
 - bounded A/B Queues;
-- No-op erzeugt keinen neuen Event;
+- Correlation/Reply Routing;
+- Tracebarkeit von Message-Ketten;
+- No-op erzeugt keinen unnötigen Folge-Event;
 - Cactus Contact als zweiter Proof Case.
 
-#7:
+### Harte Bus-Regeln
+
+Nicht ausreichend:
+
+```text
+event_id -> vector<callbacks>
+```
+
+Ein solcher Callback-Fanout darf intern als Optimierung existieren, ist aber **nicht** das öffentliche Kommunikationsmodell.
+
+Jede routbare Kommunikation muss logisch mindestens beantworten können:
+
+```text
+WHO sent it?
+WHO/WHAT should receive it?
+IN WHICH context?
+WHAT action/event/query is this?
+WHAT is the target?
+WHAT payload belongs to it?
+IS a reply expected / what message does it correlate to?
+```
+
+Commands, Queries, Events und Replies dürfen unterschiedliche Validierungs-/Dispatchregeln besitzen, aber **keine getrennten inkompatiblen Nachrichtentypen/Busse**.
+
+### M07 Proof Cases
+
+#### A. Event
+
+```text
+sender   = physics:jolt
+receiver = capability:contact
+context  = physics
+kind     = Event
+action   = contact
+target   = WorldObjectRef / EntityRef
+payload  = contact data
+```
+
+Cactus-Verhalten wird anschließend über Registry/Slot/Action auf generischen Damage-Flow geroutet. Kein Cactus-Spezialfall im Bus.
+
+#### B. Query + Reply
+
+Mindestens ein kleiner synthetischer Query-Test muss zeigen:
+
+```text
+Query(message_id=X)
+    -> handler
+    -> Reply(correlation_id=X)
+```
+
+ohne Funktionspointer im transportierbaren Envelope.
+
+#### C. Command bleibt kompatibel
+
+Die bereits aus M06 funktionierenden `place_block`-/`remove_block`-Commands laufen nach der M07-Generalisation **unverändert weiter**.
+
+### #7 Lua Callback Cache
 
 - `luaL_ref` Callback Handles;
 - RAII/Lifetime;
@@ -662,6 +873,10 @@ Wenn dafür Input direkt den ChunkManager mutieren muss:
 - stale-reference Tests;
 - Fehlerkontext;
 - Benchmark.
+
+Wichtig:
+
+`luaL_ref` ist eine lokale Implementierungsoptimierung für Lua-Handler. Es darf nicht zu einem `callback`-Pointer im Communication-Envelope werden.
 
 Bytecode Cache optional.
 
@@ -721,16 +936,32 @@ Gameplaycode kennt RocksDB nicht.
 - Transport Interface;
 - InProcess/Loopback;
 - zuerst #18 `place_block`/`remove_block`;
+- **denselben CommunicationEnvelope aus M06/M07 transportieren**;
+- Sender/Receiver/Context/Action/Target/Payload/Message-ID/Correlation semantisch erhalten;
+- Replies über denselben Reply-/Correlation-Vertrag zurückführen;
 - alten direkten Übergang entfernen;
 - Determinism-/Content-Handshake;
 - Client rekonstruiert Base World;
 - Server liefert Deltas.
 
-Harte Regel:
+Harte Regeln:
 
 Standalone = Client + Embedded Server.
 
 Kein anderer Gameplaypfad für Singleplayer.
+
+#13 darf **keine zweite `NetworkMessage`-Semantik** erfinden, die Actions/Events in ein neues fachliches Nachrichtenmodell übersetzt. Der Transport darf serialisieren, rahmen, komprimieren, authentifizieren und zustellen. Die logische Kommunikation stammt aus M06/M07.
+
+Pflichtbeweis:
+
+```text
+M06/M07 CommunicationEnvelope
+-> InProcess/Loopback Transport
+-> GameServer Router/Handler
+-> Reply/Event zurück über denselben Vertrag
+```
+
+Ein Wechsel von InProcess zu echtem Netzwerk darf keine Gameplay-Action-API neu definieren müssen.
 
 ---
 
@@ -823,7 +1054,7 @@ Nach stabiler Worldgen-/Content-Basis:
 
 RmlUi-Basis darf früh entstehen.
 
-Gameplay-mutierende UI-Aktionen erst über #3 Actions und später #13 Server Boundary.
+Gameplay-mutierende UI-Aktionen als Commands über den gemeinsamen M06/M07 CommunicationEnvelope und später über #13 Server Boundary.
 
 Keine UI → ECS/Sidecar/World Direktmutation.
 
@@ -904,6 +1135,34 @@ Keine Village-eigene Geometry Engine.
 
 ---
 
+## P08 — #19 Jolt Physics Foundation
+
+Physics ist eine eigene Engine-Säule, aber muss die bestehende World-/Communication-Spine konsumieren.
+
+Reihenfolge:
+
+1. Physics Contracts / lokaler Physics Anchor;
+2. data-driven `collision_enabled` + Physics-Material Defaults;
+3. sparse Sidecar Overrides nur bei Abweichung vom Prototype;
+4. renderer-unabhängiger Physics Greedy Mesher;
+5. statische Chunk-Collider / Jolt Residency;
+6. Character Controller / Grounding / Gravity;
+7. Pflichtbeweis: Block unter Spieler via #18 entfernen -> Collider invalid -> Support weg -> Spieler fällt;
+8. Friction/Restitution Proof Cases;
+9. Jolt Contact -> **M07 CommunicationEnvelope/Event Router**;
+10. enTT <-> Jolt Dynamic-Body Lifecycle nach brauchbarem M08.
+
+Harte Regeln:
+
+- kein Jolt Body pro Terrain-Voxel;
+- Jolt ist nicht authoritative World State;
+- keine Ogre-Mesh-Abhängigkeit im Physics Core;
+- keine astronomischen absoluten Koordinaten direkt in Jolt;
+- keine C++-Spezialfälle für Ice/Slime/Cactus;
+- Contact Events nutzen M07, kein zweiter Physics-Eventbus.
+
+---
+
 # 11. Harte STOP-Bedingungen
 
 Der Agent muss die Architektur korrigieren, wenn einer dieser Fälle entsteht:
@@ -912,6 +1171,12 @@ Der Agent muss die Architektur korrigieren, wenn einer dieser Fälle entsteht:
 - Lua muss wissen, ob ein Objekt ECS-backed ist;
 - UI mutiert World/ECS/Sidecars direkt;
 - Input mutiert `ChunkManager` direkt;
+- M06 baut einen Action-Umschlag, der nicht als gemeinsamer CommunicationEnvelope für M07/M10 taugt;
+- M07 baut nur `event_id -> vector<callbacks>` und verliert Sender/Receiver/Context/Target/Reply-Semantik;
+- M07 führt einen zweiten inkompatiblen Event-Nachrichtentyp neben M06 Commands ein;
+- ein transportierbarer Message-Vertrag enthält rohe Funktionspointer/`std::function`/`luaL_ref`;
+- M10 erfindet eine fachlich neue NetworkMessage-Semantik statt den M06/M07-Envelope zu transportieren;
+- Physics/Jolt erfindet einen eigenen Gameplay-/Contact-Bus neben M07;
 - Construction und Blueprint besitzen verschiedene Shape-Libraries;
 - Village erfindet eine dritte Shape-Library;
 - Fluid erfindet eine zweite Queue;
@@ -1018,9 +1283,9 @@ M04 Sidecars
   ↓
 M05 Unified World State
   ↓
-M06 Actions + echte Blockinteraktion
+M06 Communication Foundation + Commands + echte Blockinteraktion
   ↓
-M07 Events + Lua Callback Cache
+M07 Communication Router + Events/Queries/Replies + Lua Callback Cache
   ↓
 M08 enTT Hot State
   ↓
@@ -1043,6 +1308,7 @@ Parallel, sofern Voraussetzungen erfüllt:
 #11 Vegetation
 #12 Fluids
 #5 Villages
+#19 Jolt Physics
 ```
 
 ---
@@ -1051,7 +1317,7 @@ Parallel, sofern Voraussetzungen erfüllt:
 
 #18 ist der erste echte Architekturtest.
 
-Sobald World State und minimale Actions stehen, muss ein Spieler wirklich:
+Sobald World State und die minimale M06-Communication-Foundation mit echten Commands stehen, muss ein Spieler wirklich:
 
 - einen Block raycasten;
 - ihn entfernen;
@@ -1059,7 +1325,7 @@ Sobald World State und minimale Actions stehen, muss ein Spieler wirklich:
 - eine sichtbare Meshänderung bekommen;
 - Dirty State erzeugen.
 
-Erst danach werden Eventsystem, ECS, Persistence und Netzwerk weiter ausgebaut.
+Erst danach werden Communication Router/Eventsemantik, ECS, Persistence und Netzwerk weiter ausgebaut.
 
 Wenn dieser kleine Pfad nicht sauber funktioniert, ist die Foundation nicht bewiesen.
 
@@ -1075,9 +1341,12 @@ Primus impetus ist erfolgreich, wenn OmniGrid eine gemeinsame, bewiesene Spine b
 - stabile Prototypes/IDs;
 - sparse Sidecars;
 - eine Unified World State API;
-- echte Player-Blockinteraktion über Actions;
+- echte Player-Blockinteraktion über Commands im gemeinsamen CommunicationEnvelope;
+- adressierbare Kommunikation mit Sender/Receiver/Context/Action/Target/Payload;
+- Message-ID + Reply-/Correlation-Semantik ohne transportgebundene Funktionspointer;
+- Commands/Queries/Events/Replies unter einem gemeinsamen Vertrag;
 - zentrale Dirty-/Invalidation-Hooks;
-- bounded Events;
+- bounded Communication/Event Queues;
 - Lua Callback Cache;
 - enTT nur für Hot State;
 - RocksDB Base+Delta Persistence;
