@@ -1020,17 +1020,124 @@ Ein Agent muss trotzdem **einen begonnenen Milestone sauber abschließen und com
 
 ## P01 — #4 Render / Streaming / LOD
 
-Reihenfolge:
+P01 behandelt **drei getrennte Zustandsfragen**, die nicht in einen einzigen Radius oder State zusammenfallen dürfen:
+
+1. **Materialization State:** Wie vollständig ist generierter Content bereits verfügbar?
+2. **Residency State:** Welche World-/Chunk-Daten bleiben im Speicher?
+3. **Render LOD State:** Welche visuelle Repräsentation wird für die Kamera benötigt?
+
+### Progressive Materialisierung
+
+Ein Chunk darf sinnvoll sichtbar werden, bevor jedes späte Dekorationsdetail fertig ist.
+
+Konzeptionell zulässige Stufen sind zum Beispiel:
+
+```text
+BASE_READY
+-> STRUCTURES_READY
+-> DECORATION_READY
+```
+
+Exakte Namen bleiben Implementierungsdetail.
+
+Harte Regeln:
+
+- Base Terrain / wesentliche Oberfläche hat Priorität vor später Kleindekoration;
+- Terrain darf gerendert/angezeigt werden, während Bäume/Strukturen oder insbesondere Blumen/Gras/Detail noch nachlaufen;
+- spätere Materialisierungsstufen müssen deterministisch bleiben;
+- spätere Completion invalidiert nur die erforderlichen Chunks/Meshes/Metadaten;
+- Render-Komfort darf keinen logisch ungültigen autoritativen Gameplay-State erzeugen;
+- Materialization State und Render LOD State sind **verschiedene Verträge**;
+- bei Backlog gilt: nützliche Terrain-Abdeckung vor kosmetischer Vollständigkeit.
+
+### Sticky Residency / Hysterese
+
+Der aktuelle Prototyp darf nicht dauerhaft bei `ein Radius lädt und derselbe Radius wirft sofort wieder weg` bleiben.
+
+Mindestens gilt konzeptionell:
+
+```text
+load_radius < unload_radius
+```
+
+Ein fehlender Chunk wird innerhalb des Load-Radius zum Load-Kandidaten. Ein bereits residenter Chunk bleibt über diese Grenze hinaus sticky und wird erst außerhalb des größeren Keep-/Unload-Radius **evictable**.
+
+Das Verlassen des Load-Radius allein darf einen residenten Chunk nicht sofort zerstören.
+
+### Radius ist nicht Budget
+
+Entfernung entscheidet, was aktuell gebraucht wird. Speicher-/Residency-Budget entscheidet, wie viel bereits geladenes Material behalten werden darf.
+
+Ein Chunk außerhalb des Keep-/Unload-Radius wird zunächst **evictable**, nicht zwangsläufig sofort evicted.
+
+Eviction darf unter anderem berücksichtigen:
+
+- Distanz;
+- Last-Use/Alter;
+- Memory Pressure / Chunk-Budget;
+- aktive Simulation/Physics-Relevanz;
+- Dirty-/Persistence-Zustand;
+- noch nützliche Render-Repräsentation.
+
+Kernregel:
+
+> **Nicht entladen, nur weil es möglich ist. Evicten, wenn Policy/Budget es verlangt.**
+
+Dirty/authoritative Daten müssen vor destruktiver Eviction den normalen World-State-/Persistence-Vertrag einhalten.
+
+### Degrade before disappear
+
+Wo die jeweilige P01-Ausbaustufe es erlaubt, soll Entfernung vorzugsweise zu einer günstigeren Darstellung führen statt direkt von Vollchunk auf Nichts zu springen:
+
+```text
+LOD0/full
+-> simplified LOD
+-> coarse/surface representation
+-> optional Far WorldGen Preview
+-> no representation
+```
+
+Full voxel residency, Simulation Relevance, Render Representation und Persistence Lifetime sind getrennte Konzepte.
+
+### Data-driven Tuning
+
+Praktische Radien/Budgets/Thresholds dürfen nicht als neue Magic Constants auf dem aktuellen Radius `3` festgeschrieben werden.
+
+Mindestens konzeptionell konfigurierbar halten:
+
+- near/load radius;
+- sticky/keep/unload radius;
+- far LOD radius;
+- max resident chunks und/oder Memory Budget;
+- eviction grace time;
+- Materialization-/Generation-Prioritäten/Budgets;
+- Mesh-/Upload-/Render-Work-Budgets.
+
+Exakte Settings-Namen sind Implementierungsdetail und müssen dem normalen Config-/Settings-Vertrag folgen.
+
+### P01 Reihenfolge
 
 1. Surface Metadata
 2. camera-aware Queue
-3. LOD Meshes
-4. LOD Transitions/Seams
-5. Near/Far Residency Split
-6. Visibility Metadata
-7. Far Worldgen Preview
+3. Progressive Materialization Contract / Priorisierung
+4. Streaming Residency Hysteresis + data-driven Load/Unload/Keep Policy
+5. LOD Meshes
+6. LOD Transitions/Seams
+7. Near/Far Residency Split
+8. Visibility Metadata
+9. Far Worldgen Preview
+10. Diagnostics/Tuning für Materialization, Residency, Eviction und LOD
 
 Ab M06 muss Player-Blockedit als Invalidation-/LOD-Regressionstest dienen.
+
+Zusätzliche Pflichtbeweise für P01:
+
+- schnelles `raus -> zurück` verursacht deutlich weniger Evict/Regenerate-Thrashing;
+- ein residenter Chunk verschwindet nicht direkt beim Überschreiten des Load-Radius;
+- Base Terrain kann sichtbar sein, obwohl Late Decoration noch pending ist;
+- Materialization- und LOD-State sind im Test/Diagnostic getrennt beobachtbar;
+- relevante Radien/Budgets sind data-driven;
+- Altitude-/Fast-Flight fällt nicht allein wegen eines gemeinsamen Load/Unload-Radius in den bisherigen `3 Chunks -> nichts`-Flying-Islands-Effekt zurück.
 
 ---
 
@@ -1181,6 +1288,10 @@ Der Agent muss die Architektur korrigieren, wenn einer dieser Fälle entsteht:
 - Village erfindet eine dritte Shape-Library;
 - Fluid erfindet eine zweite Queue;
 - Fluid erfindet eigene Persistence;
+- P01 koppelt Laden und sofortige Eviction dauerhaft an denselben Radius;
+- P01 blockiert Base-Terrain-Sichtbarkeit unnötig auf Late Decoration/Blumen/Detail;
+- P01 verschmilzt Materialization State und Render LOD State zu einem einzigen Vertrag;
+- P01 hardcodiert die aktuelle `3 Chunks`-Prototype-Grenze statt data-driven Settings/Budgets zu verwenden;
 - Client schreibt Saves;
 - Client besitzt authoritative Mutable World State;
 - Singleplayer umgeht den Server;
