@@ -21,7 +21,8 @@ namespace world
     public:
         void onBlockChanged( const BlockAddress &, std::uint16_t oldRuntimeId,
                              std::uint16_t newRuntimeId ) override;
-        void onPropertyChanged( const BlockAddress &, const std::string &propertyId ) override;
+        void onPropertyChanged( const BlockAddress &, const std::string &propertyId,
+                                std::optional<PropertyValue> value ) override;
         void flush() override;
 
         // -- introspection (tests / M09 migration probe) ----------------------

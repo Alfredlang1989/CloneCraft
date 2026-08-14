@@ -189,19 +189,33 @@ again.
 M05 delivers the registry-driven resolver as the unified world state
 (`src/world/state/WorldState.h`): game code calls `has()`/`get()`/`set()` by
 *any* declared sidecar id — not just `core:orientation` — and never learns
-whether a value comes from a stored sidecar entry or from the type's
-data-driven default. `get()` falls back to `SidecarDef::defaultValue` (an
-absent or unloaded chunk still answers with its declared default; only unknown
-ids return `nullopt`), `has()` reports whether explicit stored state exists,
-and `set()` rejects unknown ids, type-mismatched values and AIR positions and
-never creates chunks. Writes of the declared default remove the stored entry
-again. `WorldState` is also the single central block-mutation entry point
-(`setBlock`) with granular change hooks (`what` = `"block"` or the property
-id) and a `PersistenceSink` abstraction (M09 implements the RocksDB backend;
-the reference `MemoryPersistenceSink` records dirty chunks and last-write-wins
-deltas). ChunkManager keeps `setBlockOrientation`/`blockOrientation` as
-convenience shims over the generic `core:orientation` sidecar — the shim and
-the unified world state read and write the exact same storage.
+whether a value comes from a prototype default, a stored sidecar entry or
+(from M08 on) the ECS hot layer. The world state is *prototype-aware*:
+
+- `has(address, propertyId)` answers **"does this object support the
+  property?"** — true exactly when the block's prototype declares the
+  property in `prototype.properties`. It is a logical capability, independent
+  of stored state. AIR, unloaded chunks and plain scenery blocks without a
+  prototype own no properties (`has` = false).
+- `get()` resolves the stored override, then the prototype-specific default
+  (prototypes.json), then the sidecar type default (`sidecars.json`); only
+  unknown property ids return `nullopt`.
+- `set()` stores a per-block override of the prototype default. It rejects
+  undeclared/unknown property ids, values that do not fit the declared
+  `valueType` (uint8/16/32 range **and** `bitWidth`) and AIR positions, and
+  never creates chunks. Writing the logical default removes the override.
+
+`WorldState` is also the single central block-mutation entry point (`setBlock`)
+with granular change hooks (`what` = `"block"` or the property id), mesh/
+neighbour invalidation (boundary blocks notify their adjacent chunks for block
+*and* property changes) and a `PersistenceSink` abstraction. The reference
+`MemoryPersistenceSink` records dirty chunks and last-write-wins deltas;
+`PropertyDelta` carries the final property value (or `nullopt` when an
+override was removed by a default write or a block replacement), and
+`persist: false` sidecars never reach the sink. ChunkManager keeps
+`setBlockOrientation`/`blockOrientation` as convenience shims over the
+generic `core:orientation` sidecar — the shim and the unified world state
+read and write the exact same storage.
 
 ## prototypes.json
 
@@ -216,9 +230,21 @@ content root without prototypes is legal.
 | `displayName` | string | yes | - | user-facing name |
 | `blockId` | string | yes | - | linked physical block; must exist in `blocks.json` |
 | `capabilities` | array of string | no | empty | declared capabilities/slots (pure declarations until the signal/slot layer) |
+| `properties` | array of object | no | empty | supported logical properties + prototype defaults (M05) |
+
+Each `properties` entry declares:
+
+| Field | Type | Required | Meaning |
+|---|---:|---:|---|
+| `id` | string | yes | sidecar property id (must exist in `sidecars.json` for the value to resolve) |
+| `defaultValue` | number | yes | object-type default exposed by `get()` (integer or float) |
 
 Validation: duplicate ids, non-namespaced ids, unknown `blockId` references,
-duplicate capabilities and unknown fields are rejected with source/entry context.
+duplicate capabilities, unknown fields, non-array `properties`, duplicate
+property ids, missing/non-numeric `defaultValue` and unknown property fields
+are rejected with source/entry context. Prototype property defaults are
+matched against the sidecar type at runtime: a default that does not fit the
+declared `valueType`/`bitWidth` falls back to the sidecar type's own default.
 
 ### Runtime prototype handles
 

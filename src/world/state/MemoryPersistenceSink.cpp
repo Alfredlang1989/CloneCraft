@@ -12,10 +12,12 @@ namespace world
         mDirtyChunks.insert( address.chunk );
     }
 
-    void MemoryPersistenceSink::onPropertyChanged( const BlockAddress &address,
-                                                   const std::string &propertyId )
+void MemoryPersistenceSink::onPropertyChanged( const BlockAddress &address,
+                                               const std::string &propertyId,
+                                               std::optional<PropertyValue> value )
     {
-        mPropertyDeltas[{ address, propertyId }] = PropertyDelta{ address, propertyId };
+        mPropertyDeltas[{ address, propertyId }] =
+            PropertyDelta{ address, propertyId, value };
         mDirtyChunks.insert( address.chunk );
     }
 

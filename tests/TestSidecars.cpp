@@ -252,6 +252,20 @@ TEST_CASE( chunk_assign_blocks_invalidates_orientations )
     CHECK( !chunk.getProperty( localIndex, world::CORE_ORIENTATION_SIDECAR ).has_value() );
 }
 
+TEST_CASE( chunk_set_property_rejects_out_of_range_local_index )
+{
+    world::Chunk chunk( world::ChunkAddress{} );
+    chunk.setBlock( 1, 2, 3, 7u );
+    const world::PropertyValue up{ world::blockOrientationValue( world::BlockOrientation::Up ) };
+    const world::PropertyValue east{ world::blockOrientationValue( world::BlockOrientation::East ) };
+
+    // M05 review: the AIR check must not read mBlocks[localIndex] before the
+    // index is validated against VOLUME (a future deserialization trap).
+    CHECK( !chunk.setProperty( world::Chunk::VOLUME, world::CORE_ORIENTATION_SIDECAR, east, up ) );
+    CHECK( !chunk.setProperty( 1000000u, world::CORE_ORIENTATION_SIDECAR, east, up ) );
+    CHECK( chunk.propertySidecar( world::CORE_ORIENTATION_SIDECAR ) == nullptr );
+}
+
 TEST_CASE( chunk_manager_set_block_air_clears_orientation )
 {
     world::ChunkManager manager;

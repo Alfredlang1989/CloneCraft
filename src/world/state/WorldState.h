@@ -1,6 +1,8 @@
 #pragma once
 
 #include "world/chunk/ChunkManager.h"
+#include "world/registry/BlockIdTable.h"
+#include "world/registry/ObjectRef.h"
 #include "world/registry/Registry.h"
 #include "world/state/PersistenceSink.h"
 
@@ -8,6 +10,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace world
 {
@@ -16,18 +19,24 @@ namespace world
      * for block and block-property state.
      *
      * Hard rule: callers (Lua/game code) never know whether a value comes
-     * from a prototype/sidecar default or from stored sidecar state (or, from
-     * M08 on, from the ECS hot layer). get()/has()/set() hide the source.
+     * from a prototype default, stored sidecar state or (from M08 on) the ECS
+     * hot layer. get()/has()/set() hide the source.
      *
-     * Resolution model:
-     *  - get(): stored sidecar entry if one exists, otherwise the data-driven
-     *    default declared for the property type (sidecars.json defaultValue);
-     *    nullopt only for unknown property ids.
-     *  - has(): true when explicit stored state exists at the position.
-     *  - set(): stores through the generic per-chunk sidecar storage. Writes
-     *    of the declared default remove the entry (lazy destruction), AIR
-     *    positions and unknown/type-mismatched property ids are rejected and
-     *    never create chunks. No-op writes report false and never notify.
+     * The world state is prototype-aware (the M05 review gate): a property
+     * exists for an object only when the object's prototype declares it in
+     * `prototype.properties` (prototypes.json). Plain scenery blocks without a
+     * prototype, AIR and unloaded chunks own no properties:
+     *  - has(): "does this object support property X" (logical capability) -
+     *    true exactly when the block's prototype declares X, independent of
+     *    stored state.
+     *  - get(): the stored override if one exists, otherwise the
+     *    prototype-specific default, otherwise the sidecar type default;
+     *    nullopt when the object does not declare the property.
+     *  - set(): stores a per-block override of the prototype default. It is
+     *    rejected when the object does not declare the property, when the id
+     *    is unknown, when the value does not fit the declared sidecar type
+     *    (including bitWidth) or on AIR/unloaded positions - and never
+     *    creates chunks. Writing the logical default removes the override.
      *
      * Mutations are centralised here: gameplay code must not reach into
      * ChunkManager directly (M06 action path depends on that). Worldgen base
@@ -37,7 +46,8 @@ namespace world
     class WorldState
     {
     public:
-        WorldState( ChunkManager &chunks, const SidecarRegistry &sidecars );
+        WorldState( ChunkManager &chunks, const BlockIdTable &idTable,
+                    const SidecarRegistry &sidecars, const PrototypeRegistry &prototypes );
 
         // -- unified property API --------------------------------------------
         bool has( const BlockAddress &, const std::string &propertyId ) const;
@@ -48,7 +58,8 @@ namespace world
 
         // -- central block mutation ------------------------------------------
         /** @return true when the block actually changed (no-op writes are
-         *  not dirty and not persisted). */
+         *  not dirty and not persisted). Replacing a block invalidates its
+         *  property overrides and reports their removal to the sink. */
         bool setBlock( const BlockAddress &, std::uint16_t runtimeId );
         /** Loaded block at the position, nullopt for unloaded chunks. */
         std::optional<std::uint16_t> blockAt( const BlockAddress & ) const;
@@ -63,13 +74,22 @@ namespace world
         void setPersistenceSink( PersistenceSink *sink ) { mPersistenceSink = sink; }
 
         const SidecarRegistry &sidecars() const { return mSidecars; }
+        const PrototypeRegistry &prototypes() const { return mPrototypes; }
 
     private:
         const SidecarDef *resolve( const std::string &propertyId ) const;
+        const PrototypeDef *prototypeAt( const BlockAddress & ) const;
+        const PrototypePropertyDef *propertyDecl( const PrototypeDef &,
+                                                  const std::string &propertyId ) const;
+        bool valueFitsSidecarDef( const SidecarDef &, const PropertyValue & ) const;
+        PropertyValue logicalDefaultFor( const PrototypeDef &, const SidecarDef &,
+                                         const PrototypePropertyDef & ) const;
         void emitChange( const BlockAddress &, const std::string &what );
 
         ChunkManager &mChunks;
+        const BlockIdTable &mIdTable;
         const SidecarRegistry &mSidecars;
+        const PrototypeRegistry &mPrototypes;
         ChangeCallback mOnChange;
         PersistenceSink *mPersistenceSink = nullptr;
     };

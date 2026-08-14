@@ -43,20 +43,24 @@
   3) in MODS/Default, persistent prototype block-claims across load calls.
   Suites: `sidecars` 19 cases, `prototypes` 13 cases, 19/19 PASS.
 - M05 — Unified world state (#3): **done**. `world::WorldState` (new
-  `world.state` module) is the single game-facing entry point: `has`/`get`/
-  `set` by any declared sidecar id with data-driven defaults (get falls back
-  to the declared default even for absent/unloaded chunks; unknown ids and
-  type mismatches rejected; set never creates chunks, AIR rejected, default
-  writes remove entries), central block mutation (`WorldState::setBlock`,
-  ChunkManager `setBlock` reports whether the block changed so no-ops are
-  never dirty), granular change hooks (`what` = `"block"` or the property id),
-  and the `PersistenceSink` abstraction with reference `MemoryPersistenceSink`
-  (dirty chunks + last-write-wins deltas, flush clears; RocksDB backend in
-  M09). Chunk now stores all sidecar types generically
-  (`std::map<typeId, Sidecar<PropertyValue>>`, no per-field members); the
+  `world.state` module) is the single game-facing entry point and is
+  **prototype-aware**: `has` = "does this object support the property"
+  (prototype declares it; AIR/unloaded/scenery own none), `get` resolves
+  stored override -> prototype default -> sidecar type default, `set` stores
+  a per-block override of the prototype default with runtime `valueType`/
+  `bitWidth` validation and rejects undeclared/unknown ids and AIR positions
+  (never creates chunks). Prototype schema gained `properties` (property ids +
+  prototype defaults) validated at load time. Central block mutation
+  (`WorldState::setBlock`, ChunkManager `setBlock` reports whether the block
+  changed so no-ops are never dirty), granular change hooks, boundary
+  neighbour invalidation for block *and* property changes, and the
+  `PersistenceSink` abstraction with reference `MemoryPersistenceSink`
+  (dirty chunks + last-write-wins deltas carrying property values/removals,
+  `persist: false` filtered, flush clears; RocksDB backend in M09). Chunk
+  stores all sidecar types generically (no per-field members); the
   orientation pilot survives as a ChunkManager shim over the same
-  `core:orientation` sidecar. Suites: `world_state` 13 cases, `sidecars`
-  updated to the generic property API, 20/20 PASS.
+  `core:orientation` sidecar. Suites: `world_state` 17 cases, `sidecars` 20
+  cases, `prototypes` 14 cases, 20/20 PASS.
 - Core spine #3 (world state/actions/events/enTT/RocksDB),
   #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
   #16/#17 (construction): **not started**.

@@ -107,7 +107,8 @@ namespace app
             } catch( const world::RegistryError &error ) { core::logError( std::string( "Sidecar registry load failed: " ) + error.what() ); return false; }
             core::logInfo( "Registered " + std::to_string( mPrototypes.size() ) + " prototype(s) and " +
                            std::to_string( mSidecars.size() ) + " sidecar type(s)" );
-            mWorldState = std::make_unique<world::WorldState>( mChunks, mSidecars );
+            mWorldState = std::make_unique<world::WorldState>( mChunks, mIdTable, mSidecars,
+                                                               mPrototypes );
             mWorldState->setPersistenceSink( &mPersistenceSink );
             try {
                 mGenConfig = worldgen::loadWorldGenConfig( mContentRoot.path / "worldgen.json" );

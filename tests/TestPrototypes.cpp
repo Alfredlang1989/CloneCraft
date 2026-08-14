@@ -82,7 +82,70 @@ TEST_CASE( prototypes_default_mod_loads_pilot_cactus )
         CHECK_EQ( cactus->capabilities.size(), std::size_t{ 1 } );
         if( cactus->capabilities.size() == 1u )
             CHECK( cactus->capabilities[0] == "contact.damage" );
+        // M05: the pilot prototype declares the orientation property and its
+        // prototype default (Up = 0) - the unified world state resolves it.
+        CHECK_EQ( cactus->properties.size(), std::size_t{ 1 } );
+        if( cactus->properties.size() == 1u )
+        {
+            CHECK( cactus->properties[0].id == "core:orientation" );
+            CHECK( std::holds_alternative<std::uint32_t>( cactus->properties[0].defaultValue ) );
+            CHECK_EQ( std::get<std::uint32_t>( cactus->properties[0].defaultValue ), 0u );
+        }
     }
+}
+
+TEST_CASE( prototypes_parse_properties_and_reject_invalid_declarations )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+
+    const PrototypeRegistry withProperties = parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [
+            { "id": "core:orientation", "defaultValue": 0 },
+            { "id": "mod:heat", "defaultValue": 20.5 }
+          ] } ]})", blocks );
+    const PrototypeDef *cactus = withProperties.find( "default:cactus" );
+    CHECK( cactus != nullptr );
+    if( cactus )
+    {
+        CHECK_EQ( cactus->properties.size(), std::size_t{ 2 } );
+        if( cactus->properties.size() == 2u )
+        {
+            CHECK( cactus->properties[0].id == "core:orientation" );
+            CHECK( std::holds_alternative<std::uint32_t>( cactus->properties[0].defaultValue ) );
+            CHECK( cactus->properties[1].id == "mod:heat" );
+            CHECK( std::holds_alternative<float>( cactus->properties[1].defaultValue ) );
+            CHECK_EQ( std::get<float>( cactus->properties[1].defaultValue ), 20.5f );
+        }
+    }
+
+    // Property without a default is invalid.
+    CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "core:orientation" } ] } ]})", blocks ); } ) );
+    // Non-namespaced property id.
+    CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "orientation", "defaultValue": 0 } ] } ]})", blocks ); } ) );
+    // Non-numeric default (string).
+    CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "core:orientation", "defaultValue": "up" } ] } ]})", blocks ); } ) );
+    // Duplicate property id.
+    CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [
+            { "id": "core:orientation", "defaultValue": 0 },
+            { "id": "core:orientation", "defaultValue": 1 }
+          ] } ]})", blocks ); } ) );
+    // Unknown property field.
+    CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "core:orientation", "defaultValue": 0, "unit": "deg" } ] } ]})", blocks ); } ) );
+    // properties must be an array.
+    CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": { "core:orientation": 0 } } ]})", blocks ); } ) );
 }
 
 TEST_CASE( prototypes_block_bridge_resolves_pilot_block )

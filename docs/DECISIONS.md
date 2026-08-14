@@ -275,19 +275,24 @@ v16 local noise while moving large-address work out of the voxel hot path.
 **Decision:** `world::WorldState` (src/world/state/, module `world.state`) is
 the single game-facing entry point for block and block-property state.
 Gameplay/Lua code calls `has`/`get`/`set` by data-driven property id and
-`setBlock` for block mutation. It resolves values against the
-`SidecarRegistry`: `get()` falls back to the type's declared default (even for
-absent/unloaded chunks; only unknown ids return nullopt), `set()` rejects
-unknown ids, type-mismatched values and AIR positions and never creates
-chunks, and default writes remove stored entries. All gameplay mutations flow
-through WorldState into granular change hooks (`what` = `"block"` or the
-property id) and a `PersistenceSink` (dirty-chunk/last-write-wins deltas in
-the reference `MemoryPersistenceSink`; RocksDB backend in M09).
+`setBlock` for block mutation. The world state is **prototype-aware** (M05
+review gate): a property exists for an object only when the object's prototype
+declares it in `prototype.properties` (prototypes.json, including the
+prototype-specific default). `has` answers the logical capability question
+"does this object support property X" - not "is an override stored"; `get`
+resolves stored override -> prototype default -> sidecar type default;
+`set` stores a per-block override of the prototype default and enforces the
+declared sidecar `valueType`/`bitWidth` at runtime. All gameplay mutations
+flow through WorldState into granular change hooks (`what` = `"block"` or the
+property id), boundary neighbour invalidation, and a `PersistenceSink`.
 
-**Why:** Callers must never know whether a value comes from a prototype/
-sidecar default or stored sidecar state (or, later, the M08 ECS hot layer).
-Centralising mutation makes dirty tracking, change hooks and persistence
-one code path instead of scattered direct ChunkManager writes; M06 actions and
+**Why:** Callers must never know whether a value comes from a prototype
+default, stored sidecar state or, later, the M08 ECS hot layer. Centralising
+mutation makes dirty tracking, change hooks and persistence one code path
+instead of scattered direct ChunkManager writes. The prototype gate makes
+the API a *logical object state API* (an object owns the properties its
+prototype declares) rather than a generic sidecar write-anywhere API: plain
+scenery blocks, AIR and unloaded chunks own no properties. M06 actions and
 M08 events depend on that. The M04 pilot showed direct chunk orientation
 writes scale poorly once multiple sidecar types exist.
 
@@ -298,13 +303,29 @@ writes scale poorly once multiple sidecar types exist.
   the data-driven type id; std::map keeps serialization order deterministic
   for M09). No per-field sidecar members are ever added to Chunk.
 - `PropertyValue = std::variant<std::uint32_t, float>` mirrors
-  `SidecarDef::defaultValue`; the resolver enforces the value type declared in
-  `sidecars.json`, so a sidecar never mixes alternatives.
+  `SidecarDef::defaultValue`; the resolver enforces the value type *and
+  bitWidth* declared in `sidecars.json`, so a sidecar never mixes alternatives
+  and never stores a value wider than its declared encoding.
+- Prototypes declare supported properties + prototype defaults in
+  `prototype.properties` (PrototypePropertyDef), validated at load time.
+  `get()` uses the prototype default before the sidecar type default; a
+  prototype default that does not fit the sidecar type falls back to the
+  sidecar default.
 - ChunkManager keeps `setBlockOrientation`/`blockOrientation` as convenience
   shims over the same `core:orientation` sidecar the unified world state uses —
   one storage, two views, verified by tests.
 - ChunkManager `setBlock` returns whether the block actually changed; no-op
-  writes are never dirty, never notify and never reach the sink.
+  writes are never dirty, never notify and never reach the sink. Boundary
+  block *and* property changes invalidate the adjacent chunks
+  (mesh/neighbour invalidation, M05).
+- `PropertyDelta` records carry the final property value (nullopt = the
+  override no longer exists: a default write or a block replacement removed
+  it). Sidecars with `persist: false` never reach the sink.
+- ChunkManager APIs stay public as the physical storage/test surface; the
+  semantic gates (prototype capability, type/width, AIR, no chunk creation)
+  live in WorldState. Gameplay must not call ChunkManager mutation directly —
+  M06 enforces this with its first real consumer (hard stop if input/UI has
+  to mutate ChunkManager directly).
 - Worldgen base load (`assignBlocks` via the streaming manager) stays outside
   the unified mutation path — it is content loading, not gameplay mutation.
 - The M04 review constraint stands: adding `mTemperature`/`mDamage`/`mPower`

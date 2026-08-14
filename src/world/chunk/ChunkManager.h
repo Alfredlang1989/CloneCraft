@@ -68,6 +68,9 @@ namespace world
         Chunk *getOrCreateChunk( const ChunkAddress & );
         void notifyChange( const ChunkAddress & );
         void notifyChangeWithNeighbors( const ChunkAddress & );
+        /** Notifies the block's chunk and, for boundary blocks, the directly
+         *  adjacent chunks (mesh/neighbour invalidation, M05). */
+        void notifyChangeForBlock( const BlockAddress & );
 
         std::map<GroupAddress, ChunkGroup> mGroups;
         ChangeCallback mOnChunkChange;

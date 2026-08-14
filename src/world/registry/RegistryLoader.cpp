@@ -716,7 +716,7 @@ namespace world
             throw RegistryError( source + ": expected an object with a 'prototypes' array" );
 
         static const char *const allowed[] = {
-            "id", "displayName", "blockId", "capabilities"
+            "id", "displayName", "blockId", "capabilities", "properties"
         };
         const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
 
@@ -745,6 +745,58 @@ namespace world
                     throw RegistryError( context( source, index ) +
                                          ": duplicate capability '" + capability + "'" );
                 seen.push_back( capability );
+            }
+
+            if( entry.contains( "properties" ) )
+            {
+                if( !entry["properties"].is_array() )
+                    throw RegistryError( context( source, index ) +
+                                         ": 'properties' must be an array" );
+                static const char *const propertyAllowed[] = { "id", "defaultValue" };
+                const size_t propertyAllowedCount =
+                    sizeof( propertyAllowed ) / sizeof( propertyAllowed[0] );
+                std::vector<std::string> seenProperties;
+                int propertyIndex = 0;
+                for( const json &property : entry["properties"] )
+                {
+                    ++propertyIndex;
+                    if( !property.is_object() )
+                        throw RegistryError( context( source, index ) +
+                                             ": 'properties' entry " +
+                                             std::to_string( propertyIndex ) +
+                                             " must be an object" );
+                    checkUnknownFields( property, source, index, propertyAllowed,
+                                        propertyAllowedCount );
+                    PrototypePropertyDef propertyDef;
+                    propertyDef.id = requireString( property, source, index, "id" );
+                    if( !isNamespacedId( propertyDef.id ) )
+                        throw RegistryError( context( source, index ) +
+                                             ": property id '" + propertyDef.id +
+                                             "' must be namespaced as <namespace>:<name>" );
+                    if( std::find( seenProperties.begin(), seenProperties.end(),
+                                   propertyDef.id ) != seenProperties.end() )
+                        throw RegistryError( context( source, index ) +
+                                             ": duplicate property '" + propertyDef.id +
+                                             "' in prototype '" + def.id + "'" );
+                    seenProperties.push_back( propertyDef.id );
+                    if( !property.contains( "defaultValue" ) )
+                        throw RegistryError( context( source, index ) +
+                                             ": property '" + propertyDef.id +
+                                             "' requires 'defaultValue'" );
+                    const json &defaultValue = property["defaultValue"];
+                    if( defaultValue.is_number_integer() ||
+                        defaultValue.is_number_unsigned() )
+                        propertyDef.defaultValue =
+                            PropertyValue{ static_cast<std::uint32_t>( defaultValue.get<int64_t>() ) };
+                    else if( defaultValue.is_number_float() )
+                        propertyDef.defaultValue =
+                            PropertyValue{ static_cast<float>( defaultValue.get<double>() ) };
+                    else
+                        throw RegistryError( context( source, index ) +
+                                             ": property '" + propertyDef.id +
+                                             "' defaultValue must be a number" );
+                    def.properties.push_back( std::move( propertyDef ) );
+                }
             }
 
             if( !blocks.contains( def.blockId ) )

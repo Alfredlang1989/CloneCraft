@@ -19,6 +19,19 @@ namespace world
         if( tryOffsetChunk( c, 0, 0,  1, n ) ) notifyChange( n );
     }
 
+    void ChunkManager::notifyChangeForBlock( const BlockAddress &b )
+    {
+        notifyChange( b.chunk );
+        const std::int64_t edge = BLOCKS_PER_CHUNK_EDGE - 1;
+        ChunkAddress n;
+        if( b.block.x == 0 && tryOffsetChunk( b.chunk, -1, 0, 0, n ) ) notifyChange( n );
+        if( b.block.x == edge && tryOffsetChunk( b.chunk, 1, 0, 0, n ) ) notifyChange( n );
+        if( b.block.y == 0 && tryOffsetChunk( b.chunk, 0, -1, 0, n ) ) notifyChange( n );
+        if( b.block.y == edge && tryOffsetChunk( b.chunk, 0, 1, 0, n ) ) notifyChange( n );
+        if( b.block.z == 0 && tryOffsetChunk( b.chunk, 0, 0, -1, n ) ) notifyChange( n );
+        if( b.block.z == edge && tryOffsetChunk( b.chunk, 0, 0, 1, n ) ) notifyChange( n );
+    }
+
     Chunk *ChunkManager::chunkAt( const ChunkAddress &c )
     {
         const auto it = mGroups.find( c.group );
@@ -75,16 +88,7 @@ namespace world
         const std::uint16_t previous = chunk->block( b.block.x, b.block.y, b.block.z );
         if( previous == blockId ) return false;
         chunk->setBlock( b.block.x, b.block.y, b.block.z, blockId );
-        notifyChange( b.chunk );
-
-        const std::int64_t edge = BLOCKS_PER_CHUNK_EDGE - 1;
-        ChunkAddress n;
-        if( b.block.x == 0 && tryOffsetChunk( b.chunk, -1, 0, 0, n ) ) notifyChange( n );
-        if( b.block.x == edge && tryOffsetChunk( b.chunk, 1, 0, 0, n ) ) notifyChange( n );
-        if( b.block.y == 0 && tryOffsetChunk( b.chunk, 0, -1, 0, n ) ) notifyChange( n );
-        if( b.block.y == edge && tryOffsetChunk( b.chunk, 0, 1, 0, n ) ) notifyChange( n );
-        if( b.block.z == 0 && tryOffsetChunk( b.chunk, 0, 0, -1, n ) ) notifyChange( n );
-        if( b.block.z == edge && tryOffsetChunk( b.chunk, 0, 0, 1, n ) ) notifyChange( n );
+        notifyChangeForBlock( b );
         return true;
     }
 
@@ -98,7 +102,7 @@ namespace world
         const bool changed =
             chunk->setProperty( blockIndex( b.block ), typeId, value, defaultValue );
         if( changed )
-            notifyChange( b.chunk );
+            notifyChangeForBlock( b ); // mesh/neighbour invalidation (M05)
         return changed;
     }
 
@@ -125,7 +129,7 @@ namespace world
             return false;
         if( !chunk->clearProperty( typeId ) )
             return false; // nothing to clear: no state change
-        notifyChange( a );
+        notifyChangeWithNeighbors( a );
         return true;
     }
 

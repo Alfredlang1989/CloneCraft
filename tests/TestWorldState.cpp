@@ -2,6 +2,7 @@
 #include "world/chunk/Chunk.h"
 #include "world/chunk/ChunkManager.h"
 #include "world/chunk/OrientationSidecar.h"
+#include "world/registry/BlockIdTable.h"
 #include "world/registry/Registry.h"
 #include "world/registry/RegistryLoader.h"
 #include "world/state/MemoryPersistenceSink.h"
@@ -9,6 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -23,143 +25,212 @@ namespace
         return out;
     }
 
-    world::SidecarRegistry pilotSidecars()
-    {
-        // Mirrors MODS/Default/sidecars.json for "core:orientation".
-        return parseSidecars( R"({"sidecars":[
-            { "id": "core:orientation", "displayName": "Orientation", "valueType": "uint8",
-              "defaultValue": 0, "bitWidth": 3, "storage": "sparse" } ]})" );
-    }
+    const std::string PILOT_SIDECARS = R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "Orientation", "valueType": "uint8",
+          "defaultValue": 0, "bitWidth": 3, "storage": "sparse" } ]})";
 
-    const world::BlockAddress B1 = world::fromOriginOffset( 3, 7, 9 );
-    const world::BlockAddress B2 = world::fromOriginOffset( 4, 7, 9 );
+    const std::string ORIENTED_PROPERTIES =
+        R"([ { "id": "core:orientation", "defaultValue": 0 } ])";
+
+    const world::BlockAddress B1 = world::fromOriginOffset( 3, 7, 9 );   // interior
+    const world::BlockAddress BOUNDARY = world::fromOriginOffset( 0, 7, 9 ); // x = 0 chunk edge
     const world::PropertyValue UP{ world::blockOrientationValue( world::BlockOrientation::Up ) };
     const world::PropertyValue EAST{ world::blockOrientationValue( world::BlockOrientation::East ) };
     const world::PropertyValue WEST{ world::blockOrientationValue( world::BlockOrientation::West ) };
+
+    world::BlockDef makeBlock( const std::string &id, const std::string &displayName )
+    {
+        world::BlockDef def;
+        def.id = id;
+        def.displayName = displayName;
+        return def;
+    }
+
+    /**
+     * Test world: blocks core:air / test:oriented / test:plain; the prototype
+     * "test:oriented" (blockId test:oriented) declares the given properties;
+     * "test:plain" has no prototype (pure scenery). The unified world state
+     * therefore answers properties only for oriented blocks.
+     */
+    struct Fixture
+    {
+        world::BlockRegistry blocks;
+        world::BlockIdTable idTable;
+        world::PrototypeRegistry prototypes;
+        world::SidecarRegistry sidecars;
+        world::ChunkManager manager;
+        std::unique_ptr<world::WorldState> state;
+
+        std::uint16_t orientedId;
+        std::uint16_t plainId;
+
+        explicit Fixture( const std::string &sidecarsJson = PILOT_SIDECARS,
+                          const std::string &propertiesJson = ORIENTED_PROPERTIES )
+        {
+            blocks.insert( makeBlock( "core:air", "Air" ) );
+            blocks.insert( makeBlock( "test:oriented", "Oriented" ) );
+            blocks.insert( makeBlock( "test:plain", "Plain" ) );
+            idTable = world::BlockIdTable( blocks );
+            orientedId = idTable.indexOf( "test:oriented" );
+            plainId = idTable.indexOf( "test:plain" );
+
+            const json prototypeJson = json::parse(
+                R"({"prototypes":[
+                    { "id": "test:oriented", "displayName": "Oriented", "blockId": "test:oriented",
+                      "properties": )" + propertiesJson + R"( }
+                ]})" );
+            world::RegistryLoader::parsePrototypes( prototypeJson, "test-prototypes.json",
+                                                    blocks, prototypes );
+            sidecars = parseSidecars( sidecarsJson );
+            state = std::make_unique<world::WorldState>( manager, idTable, sidecars, prototypes );
+        }
+    };
 } // namespace
 
 
-TEST_CASE( world_state_get_returns_declared_default_without_stored_state )
+TEST_CASE( world_state_unloaded_and_air_positions_own_no_properties )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
-
-    // No chunk loaded, nothing stored: the resolver still answers with the
-    // data-driven default (M05: caller must not care where the value lives).
-    CHECK( state.get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
-    CHECK( !state.has( B1, world::CORE_ORIENTATION_SIDECAR ) ); // no explicit entry
+    Fixture f;
+    // Unloaded chunk: no object, no property.
+    CHECK( !f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( !f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ).has_value() );
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK_EQ( f.manager.chunkCount(), std::size_t{ 0 } );
 }
 
-TEST_CASE( world_state_get_rejects_unknown_property_ids )
+TEST_CASE( world_state_plain_block_without_prototype_has_no_properties )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
-
-    CHECK( !state.get( B1, "mod:nope" ).has_value() );
-    CHECK( !state.has( B1, "mod:nope" ) );
+    Fixture f;
+    CHECK( f.state->setBlock( B1, f.plainId ) ); // loaded block, but pure scenery
+    CHECK( !f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( !f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ).has_value() );
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
 }
 
-TEST_CASE( world_state_set_and_get_roundtrip_with_default_removal )
+TEST_CASE( world_state_get_resolves_prototype_default )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
-
-    CHECK( state.setBlock( B1, 7u ) );
-    CHECK( !state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
-    CHECK( state.get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
-
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
-    CHECK( state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
-    CHECK( state.get( B1, world::CORE_ORIENTATION_SIDECAR ) == EAST );
-
-    // Writing the declared default removes the stored entry again.
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, UP ) );
-    CHECK( !state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
-    CHECK( state.get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
+    Fixture f;
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    CHECK( f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
 }
 
-TEST_CASE( world_state_set_rejects_type_mismatch )
+TEST_CASE( world_state_prototype_default_wins_over_sidecar_default )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
+    // Prototype default 20.5 differs from the sidecar type default 15.0.
+    const std::string sidecars = R"({"sidecars":[
+        { "id": "mod:heat", "displayName": "Heat", "valueType": "float", "defaultValue": 15.0 } ]})";
+    const std::string properties = R"([ { "id": "mod:heat", "defaultValue": 20.5 } ])";
+    Fixture f( sidecars, properties );
 
-    CHECK( state.setBlock( B1, 7u ) );
-    // core:orientation is an integral type; floats must be rejected.
-    CHECK( !state.set( B1, world::CORE_ORIENTATION_SIDECAR, world::PropertyValue{ 0.5f } ) );
-    CHECK( !state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    CHECK( f.state->has( B1, "mod:heat" ) );
+    const std::optional<world::PropertyValue> value = f.state->get( B1, "mod:heat" );
+    CHECK( value.has_value() );
+    if( value )
+    {
+        CHECK( std::holds_alternative<float>( *value ) );
+        CHECK_EQ( std::get<float>( *value ), 20.5f );
+    }
 }
 
-TEST_CASE( world_state_set_rejects_unknown_property_ids )
+TEST_CASE( world_state_get_prefers_stored_override_over_prototype_default )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
+    Fixture f;
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK( f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ) == EAST );
+}
 
-    CHECK( state.setBlock( B1, 7u ) );
-    CHECK( !state.set( B1, "mod:nope", UP ) );
+TEST_CASE( world_state_has_reports_logical_capability_not_stored_state )
+{
+    Fixture f;
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    // has() answers "does this object support the property", not "is an
+    // explicit entry stored": it stays true after writing the default.
+    CHECK( f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK( f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, UP ) );
+    CHECK( f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
+}
+
+TEST_CASE( world_state_unknown_and_undeclared_properties_are_rejected )
+{
+    Fixture f;
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+
+    // Unknown property id: rejected everywhere.
+    CHECK( !f.state->get( B1, "mod:nope" ).has_value() );
+    CHECK( !f.state->has( B1, "mod:nope" ) );
+    CHECK( !f.state->set( B1, "mod:nope", UP ) );
+
+    // Property declared in sidecars.json but not by the prototype: rejected.
+    CHECK( !f.state->has( B1, "core:unknown-to-prototype" ) );
+    CHECK( !f.state->set( B1, "core:unknown-to-prototype", UP ) );
+}
+
+TEST_CASE( world_state_set_validates_runtime_value_against_sidecar_type )
+{
+    Fixture f; // core:orientation: uint8, bitWidth 3
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, world::PropertyValue{ 0.5f } ) );
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, world::PropertyValue{ 255u } ) );
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, world::PropertyValue{ 8u } ) ); // >3 bits
+    // 6 fits the declared 3 bits; the physical orientation enum (0..5) is
+    // BlockOrientation semantics, not part of the generic type gate.
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, world::PropertyValue{ 6u } ) );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, world::PropertyValue{ 7u } ) ); // max 3-bit value fits
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, world::PropertyValue{ 5u } ) ); // West
+    CHECK( f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ) == WEST );
 }
 
 TEST_CASE( world_state_set_rejects_air_and_never_creates_chunks )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
-
-    CHECK_EQ( manager.chunkCount(), std::size_t{ 0 } );
-    CHECK( !state.set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) ); // AIR block
-    CHECK_EQ( manager.chunkCount(), std::size_t{ 0 } );
-    CHECK( !state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
-    CHECK( state.get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
-
-    // Absent chunk (no block set): still no chunk creation.
-    CHECK( !state.set( B2, world::CORE_ORIENTATION_SIDECAR, EAST ) );
-    CHECK_EQ( manager.chunkCount(), std::size_t{ 0 } );
+    Fixture f;
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) ); // AIR, no chunk yet
+    CHECK_EQ( f.manager.chunkCount(), std::size_t{ 0 } );
+    CHECK( !f.state->set( BOUNDARY, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK_EQ( f.manager.chunkCount(), std::size_t{ 0 } );
 }
 
-TEST_CASE( world_state_set_noop_does_not_notify_or_persist )
+TEST_CASE( world_state_noop_does_not_notify_or_persist )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
+    Fixture f;
     world::MemoryPersistenceSink sink;
-    state.setPersistenceSink( &sink );
+    f.state->setPersistenceSink( &sink );
 
     std::vector<std::pair<world::BlockAddress, std::string>> events;
-    state.setOnChange( [&]( const world::BlockAddress &addr, const std::string &what )
-                       { events.emplace_back( addr, what ); } );
+    f.state->setOnChange( [&]( const world::BlockAddress &addr, const std::string &what )
+                          { events.emplace_back( addr, what ); } );
 
-    CHECK( state.setBlock( B1, 7u ) ); // real change: fires + persists
+    CHECK( f.state->setBlock( B1, f.orientedId ) ); // real change: fires + persists
     CHECK_EQ( events.size(), std::size_t{ 1 } );
     CHECK_EQ( events[0].second, "block" );
     CHECK_EQ( sink.blockDeltaCount(), std::size_t{ 1 } );
 
-    CHECK( !state.setBlock( B1, 7u ) ); // same id: no-op
+    CHECK( !f.state->setBlock( B1, f.orientedId ) ); // same id: no-op
     CHECK_EQ( events.size(), std::size_t{ 1 } );
     CHECK_EQ( sink.blockDeltaCount(), std::size_t{ 1 } );
 
-    CHECK( !state.set( B1, world::CORE_ORIENTATION_SIDECAR, UP ) ); // default on default
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, UP ) ); // default on default
     CHECK_EQ( events.size(), std::size_t{ 1 } );
     CHECK_EQ( sink.propertyDeltaCount(), std::size_t{ 0 } );
 }
 
 TEST_CASE( world_state_change_hook_fires_for_real_property_changes )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
-
+    Fixture f;
     std::vector<std::string> whats;
-    state.setOnChange( [&]( const world::BlockAddress &, const std::string &what )
-                       { whats.push_back( what ); } );
+    f.state->setOnChange( [&]( const world::BlockAddress &, const std::string &what )
+                          { whats.push_back( what ); } );
 
-    state.setBlock( B1, 7u );
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, WEST ) );
-    CHECK( !state.set( B1, world::CORE_ORIENTATION_SIDECAR, WEST ) ); // no-op
+    f.state->setBlock( B1, f.orientedId );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, WEST ) );
+    CHECK( !f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, WEST ) ); // no-op
 
     CHECK_EQ( whats.size(), std::size_t{ 3 } ); // block + east + west
     CHECK_EQ( whats[0], "block" );
@@ -167,43 +238,81 @@ TEST_CASE( world_state_change_hook_fires_for_real_property_changes )
     CHECK_EQ( whats[2], world::CORE_ORIENTATION_SIDECAR );
 }
 
-TEST_CASE( world_state_set_block_is_central_mutation_with_neighbor_notification )
+TEST_CASE( world_state_set_block_is_central_mutation_with_chunk_notification )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
-
+    Fixture f;
     std::size_t chunkNotifications = 0u;
-    manager.setOnChunkChange( [&]( const world::ChunkAddress & ) { ++chunkNotifications; } );
+    f.manager.setOnChunkChange( [&]( const world::ChunkAddress & ) { ++chunkNotifications; } );
 
-    CHECK( state.setBlock( B1, 5u ) );
-    CHECK( chunkNotifications > 0u ); // chunk + boundary neighbors notified
-
-    CHECK( state.blockAt( B1 ) == std::optional<std::uint16_t>{ 5u } );
-    CHECK( !state.setBlock( B1, 5u ) ); // no-op
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    CHECK( chunkNotifications > 0u ); // chunk notified; interior block: no neighbour
+    CHECK( f.state->blockAt( B1 ) == std::optional<std::uint16_t>{ f.orientedId } );
+    CHECK( !f.state->setBlock( B1, f.orientedId ) ); // no-op
 }
 
-TEST_CASE( world_state_persistence_sink_records_block_and_property_changes )
+TEST_CASE( world_state_property_change_invalidates_boundary_neighbors )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
+    Fixture f;
+    std::size_t chunkNotifications = 0u;
+    f.manager.setOnChunkChange( [&]( const world::ChunkAddress & ) { ++chunkNotifications; } );
+
+    // Boundary block (x = 0): both the own chunk and the x-1 neighbour are
+    // invalidated - for the block and for a property on that block (M05
+    // mesh/neighbour invalidation).
+    CHECK( f.state->setBlock( BOUNDARY, f.orientedId ) );
+    CHECK_EQ( chunkNotifications, std::size_t{ 2 } );
+
+    CHECK( f.state->set( BOUNDARY, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK_EQ( chunkNotifications, std::size_t{ 4 } );
+
+    CHECK( !f.state->set( BOUNDARY, world::CORE_ORIENTATION_SIDECAR, EAST ) ); // no-op
+    CHECK_EQ( chunkNotifications, std::size_t{ 4 } );
+}
+
+TEST_CASE( world_state_persist_false_properties_never_reach_sink )
+{
+    const std::string sidecars = R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "Orientation", "valueType": "uint8",
+          "defaultValue": 0, "bitWidth": 3, "storage": "sparse" },
+        { "id": "core:transient", "displayName": "Transient", "valueType": "uint8",
+          "defaultValue": 0, "persist": false } ]})";
+    const std::string properties =
+        R"([ { "id": "core:orientation", "defaultValue": 0 },
+             { "id": "core:transient", "defaultValue": 0 } ])";
+    Fixture f( sidecars, properties );
     world::MemoryPersistenceSink sink;
-    state.setPersistenceSink( &sink );
+    f.state->setPersistenceSink( &sink );
 
-    state.setBlock( B1, 7u );
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
-    CHECK_EQ( sink.blockDeltaCount(), std::size_t{ 1 } );
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    CHECK( f.state->set( B1, "core:transient", world::PropertyValue{ 5u } ) ); // changed, but not persistable
+    CHECK_EQ( sink.propertyDeltaCount(), std::size_t{ 0 } );
+
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) ); // persist: true
     CHECK_EQ( sink.propertyDeltaCount(), std::size_t{ 1 } );
-    CHECK_EQ( sink.dirtyChunkCount(), std::size_t{ 1 } );
-    CHECK( sink.isDirty( B1.chunk ) );
-    CHECK_EQ( sink.blockDeltas().at( B1 ).oldRuntimeId, 0u );
-    CHECK_EQ( sink.blockDeltas().at( B1 ).newRuntimeId, 7u );
+}
 
-    state.setBlock( B1, 9u ); // overwrite: last-write-wins
-    CHECK_EQ( sink.blockDeltaCount(), std::size_t{ 1 } );
-    CHECK_EQ( sink.blockDeltas().at( B1 ).oldRuntimeId, 7u );
-    CHECK_EQ( sink.blockDeltas().at( B1 ).newRuntimeId, 9u );
+TEST_CASE( world_state_property_delta_carries_value_and_removal )
+{
+    Fixture f;
+    world::MemoryPersistenceSink sink;
+    f.state->setPersistenceSink( &sink );
+
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK_EQ( sink.propertyDeltaCount(), std::size_t{ 1 } );
+    CHECK( sink.propertyDeltas().at( { B1, world::CORE_ORIENTATION_SIDECAR } ).value == EAST );
+
+    // Writing the prototype default removes the override: the sink learns the
+    // property no longer has explicit state (real delta, not a bare marker).
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, UP ) );
+    CHECK_EQ( sink.propertyDeltaCount(), std::size_t{ 1 } ); // last-write-wins
+    CHECK( !sink.propertyDeltas().at( { B1, world::CORE_ORIENTATION_SIDECAR } ).value.has_value() );
+
+    // Replacing the block invalidates its property override as well.
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK( f.state->setBlock( B1, f.orientedId == 0u ? 1u : 0u ) ); // replace by AIR
+    CHECK( !sink.propertyDeltas().at( { B1, world::CORE_ORIENTATION_SIDECAR } ).value.has_value() );
+    CHECK_EQ( sink.blockDeltas().at( B1 ).newRuntimeId, 0u );
 
     sink.flush();
     CHECK_EQ( sink.blockDeltaCount(), std::size_t{ 0 } );
@@ -213,43 +322,40 @@ TEST_CASE( world_state_persistence_sink_records_block_and_property_changes )
 
 TEST_CASE( world_state_orientation_pilot_is_consistent_with_manager_shim )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
+    Fixture f;
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
 
     // One storage proof: the manager orientation shim and the unified world
     // state read and write the exact same sidecar state.
-    CHECK( state.setBlock( B1, 7u ) );
-    CHECK( manager.setBlockOrientation( B1, world::BlockOrientation::West ) );
-    CHECK( state.get( B1, world::CORE_ORIENTATION_SIDECAR ) == WEST );
-    CHECK( state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
-    CHECK( manager.blockOrientation( B1 ) == world::BlockOrientation::West );
+    CHECK( f.manager.setBlockOrientation( B1, world::BlockOrientation::West ) );
+    CHECK( f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ) == WEST );
+    CHECK( f.manager.blockOrientation( B1 ) == world::BlockOrientation::West );
 
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
-    CHECK( manager.blockOrientation( B1 ) == world::BlockOrientation::East );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK( f.manager.blockOrientation( B1 ) == world::BlockOrientation::East );
 
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, UP ) );
-    CHECK( !manager.blockOrientation( B1 ).has_value() );
-    CHECK( !state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, UP ) );
+    CHECK( !f.manager.blockOrientation( B1 ).has_value() );
+    CHECK( f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) ); // capability stays
+    CHECK( f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
 }
 
 TEST_CASE( world_state_orientation_is_cleared_when_block_is_removed )
 {
-    world::ChunkManager manager;
-    const world::SidecarRegistry sidecars = pilotSidecars();
-    world::WorldState state( manager, sidecars );
+    Fixture f;
     world::MemoryPersistenceSink sink;
-    state.setPersistenceSink( &sink );
+    f.state->setPersistenceSink( &sink );
 
-    state.setBlock( B1, 7u );
-    CHECK( state.set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
-    CHECK( state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    f.state->setBlock( B1, f.orientedId );
+    CHECK( f.state->set( B1, world::CORE_ORIENTATION_SIDECAR, EAST ) );
+    CHECK( f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ) == EAST );
 
-    // Removing the block invalidates its sidecar state (no zombies).
-    CHECK( state.setBlock( B1, 0u ) );
-    CHECK( !state.has( B1, world::CORE_ORIENTATION_SIDECAR ) );
-    CHECK( state.get( B1, world::CORE_ORIENTATION_SIDECAR ) == UP );
-    CHECK( !manager.blockOrientation( B1 ).has_value() );
+    // Removing the block invalidates its sidecar state (no zombies): the
+    // position becomes AIR, which owns no properties at all.
+    CHECK( f.state->setBlock( B1, 0u ) );
+    CHECK( !f.state->has( B1, world::CORE_ORIENTATION_SIDECAR ) );
+    CHECK( !f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ).has_value() );
+    CHECK( !f.manager.blockOrientation( B1 ).has_value() );
     CHECK_EQ( sink.blockDeltas().at( B1 ).newRuntimeId, 0u );
 }
 

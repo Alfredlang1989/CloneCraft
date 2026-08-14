@@ -100,6 +100,8 @@ namespace world
         bool setProperty( std::uint32_t localIndex, const std::string &typeId,
                           const PropertyValue &value, const PropertyValue &defaultValue )
         {
+            if( localIndex >= VOLUME )
+                return false; // out-of-range local index (M09 deserialization trap)
             if( mBlocks[localIndex] == 0u )
                 return false; // AIR: a sidecar entry would be zombie state
             auto it = mSidecars.find( typeId );

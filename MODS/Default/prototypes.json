@@ -6,6 +6,12 @@
             "blockId": "core:cactus",
             "capabilities": [
                 "contact.damage"
+            ],
+            "properties": [
+                {
+                    "id": "core:orientation",
+                    "defaultValue": 0
+                }
             ]
         }
     ]

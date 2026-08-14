@@ -159,6 +159,29 @@ namespace world
     };
 
     /**
+     * Runtime value of a data-driven sidecar/property type (M05). Mirrors
+     * SidecarDef::defaultValue: integer types store std::uint32_t, the Float
+     * value type stores float. The alternative a value must hold is enforced
+     * by the resolver (WorldState) against the SidecarDef::valueType, so a
+     * sidecar never mixes alternatives.
+     */
+    using PropertyValue = std::variant<std::uint32_t, float>;
+
+    /**
+     * A logical property an object prototype supports (M05). The id refers
+     * to a data-driven sidecar type (sidecars.json); defaultValue is the
+     * prototype-specific value the object's blocks expose when no explicit
+     * stored state exists. This is what the unified world state resolves
+     * instead of a global sidecar default: a property exists for an object
+     * only when its prototype declares it (issue #3 section 5).
+     */
+    struct PrototypePropertyDef
+    {
+        std::string id;                 // sidecar property id, e.g. "core:orientation"
+        PropertyValue defaultValue = 0u; // object-type default for that property
+    };
+
+    /**
      * Registered gameplay object/block prototype (e.g. "default:cactus").
      *
      * Prototypes are the *logical* identity layer on top of physical block
@@ -169,9 +192,13 @@ namespace world
      * between prototypes ever becomes necessary, identity must move into
      * per-block state, e.g. sidecars/ECS (M04/M05) - not into this bridge.)
      *
-     * A prototype may later own sidecar data (M04+) and event/action hooks
-     * (M07). Ids are always namespaced (<namespace>:<name>, both non-empty)
-     * and never depend on load order. The runtime handle (PrototypeIdTable)
+     * `properties` is the prototype-aware declaration of which sidecar
+     * properties this object type supports and their defaults (M05). It is
+     * what answers "does this object have property X" and what the unified
+     * world state resolves; sidecar state is the per-block *override* of
+     * that default. A prototype may later also own event/action hooks (M07).
+     * Ids are always namespaced (<namespace>:<name>, both non-empty) and
+     * never depend on load order. The runtime handle (PrototypeIdTable)
      * is a stable hash of the id.
      */
     struct PrototypeDef
@@ -184,6 +211,8 @@ namespace world
         // declarations for now; the behaviour layer arrives with the
         // signal/slot system (M07).
         std::vector<std::string> capabilities;
+        // Supported logical properties + their prototype defaults (M05).
+        std::vector<PrototypePropertyDef> properties;
     };
 
     /** Logical value schema of a data-driven sidecar type. */
@@ -201,15 +230,6 @@ namespace world
         Sparse,  // per-entry allocation, default is implicit
         Dense    // one slot per block position (future)
     };
-
-    /**
-     * Runtime value of a data-driven sidecar/property type (M05). Mirrors
-     * SidecarDef::defaultValue: integer types store std::uint32_t, the Float
-     * value type stores float. The alternative a value must hold is enforced
-     * by the resolver (WorldState) against the SidecarDef::valueType, so a
-     * sidecar never mixes alternatives.
-     */
-    using PropertyValue = std::variant<std::uint32_t, float>;
 
     /** Data-driven id of the orientation pilot type (MODS/Default/sidecars.json). */
     inline constexpr const char *CORE_ORIENTATION_SIDECAR = "core:orientation";

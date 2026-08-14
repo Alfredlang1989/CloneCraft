@@ -96,20 +96,26 @@ warm block can always fall back to cold without leaking state.
 
 `world::WorldState` (src/world/state/) is the single game-facing entry point
 for block and block-property state — the hard rule is that callers (Lua/game
-code) never know whether a value comes from a prototype/sidecar default or
-from stored sidecar state. It resolves `get()`/`has()`/`set()` by data-driven
-property id against the `SidecarRegistry`: absent or unloaded chunks answer
-`get()` with the type's declared default, unknown ids and type-mismatched
-values are rejected, and writes never create chunks. Stored state is kept in
-the generic per-chunk sidecar storage (registry-driven since M05, no
-hardcoded sidecar members in Chunk).
+code) never know whether a value comes from a prototype default, stored
+sidecar state or (from M08 on) the ECS hot layer. It is prototype-aware:
+`has()` answers "does this object support property X" (true exactly when the
+block's prototype declares the property in `prototypes.json`), `get()`
+resolves stored override -> prototype default -> sidecar type default, and
+`set()` stores a per-block override of the prototype default. AIR, unloaded
+chunks and scenery blocks without a prototype own no properties. Values are
+validated against the declared sidecar `valueType` and `bitWidth` at runtime,
+unknown/undeclared ids and AIR positions are rejected, and writes never
+create chunks. Stored state lives in the generic per-chunk sidecar storage
+(registry-driven since M05, no hardcoded sidecar members in Chunk).
 
 Mutations are centralised: gameplay code places blocks through
 `WorldState::setBlock` (ChunkManager's `setBlock` returns whether the block
 actually changed, so no-ops are never dirty). `WorldState` fires granular
-change hooks (`what` = `"block"` or the property id) and feeds a
-`PersistenceSink` abstraction — dirty-chunk and last-write-wins delta records
-today (`MemoryPersistenceSink`), RocksDB backend in M09. Worldgen base load
+change hooks (`what` = `"block"` or the property id), invalidates boundary
+neighbours for block *and* property changes (mesh/neighbour invalidation),
+and feeds a `PersistenceSink` abstraction — dirty-chunk and last-write-wins
+delta records today (`MemoryPersistenceSink`, including property removals
+and `persist: false` filtering), RocksDB backend in M09. Worldgen base load
 (`assignBlocks` via the streaming manager) stays outside the unified mutation
 path; it is not a gameplay mutation. The orientation pilot shims on
 ChunkManager read and write exactly the same `core:orientation` sidecar as the
