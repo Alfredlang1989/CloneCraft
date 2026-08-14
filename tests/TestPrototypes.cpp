@@ -30,6 +30,14 @@ namespace
         return blocks;
     }
 
+    SidecarRegistry loadRealSidecars()
+    {
+        const std::filesystem::path dataDir( OMNIGRID_DATA_DIR );
+        SidecarRegistry sidecars;
+        RegistryLoader::loadSidecars( dataDir, sidecars );
+        return sidecars;
+    }
+
     PrototypeRegistry parse( const std::string &text, const BlockRegistry &blocks )
     {
         PrototypeRegistry out;
@@ -146,6 +154,75 @@ TEST_CASE( prototypes_parse_properties_and_reject_invalid_declarations )
     CHECK( rejected( [&] { (void)parse( R"({"prototypes":[
         { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
           "properties": { "core:orientation": 0 } } ]})", blocks ); } ) );
+}
+
+TEST_CASE( prototypes_reject_property_without_registered_sidecar_type )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+    const SidecarRegistry sidecars = loadRealSidecars(); // ships core:orientation
+
+    // M05 round 2: prototype properties are validated against sidecars.json
+    // at load time (ADR-027). A property with no backing sidecar type is a
+    // broken mod and must be rejected, not produce has()==true later.
+    PrototypeRegistry out;
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "mod:missing", "defaultValue": 7 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, out, &sidecars );
+    } ) );
+
+    // Without the cross-validation gate the same document still parses (the
+    // gate is opt-in for programmatic/legacy content); the runtime WorldState
+    // guards has()/get()/set() consistency on that path too.
+    PrototypeRegistry legacy;
+    RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "mod:missing", "defaultValue": 7 } ] } ]})" ),
+                                     "test-prototypes.json", blocks, legacy );
+    CHECK_EQ( legacy.size(), std::size_t{ 1 } );
+}
+
+TEST_CASE( prototypes_reject_prototype_default_that_does_not_fit_sidecar )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+    const SidecarRegistry sidecars = loadRealSidecars(); // core:orientation: uint8, bitWidth 3
+
+    // 255 does not fit the 3-bit orientation encoding - the M04/M05 review
+    // case that used to be silently turned into the sidecar default.
+    PrototypeRegistry out;
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": 255 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, out, &sidecars );
+    } ) );
+    // Value type mismatch: a float default for an integer sidecar type.
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": 0.5 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, out, &sidecars );
+    } ) );
+}
+
+TEST_CASE( prototypes_default_mod_validates_against_default_sidecars )
+{
+    // The shipped content must pass the cross-validation gate: default:cactus
+    // declares core:orientation with default 0, which fits the registered
+    // uint8/3-bit sidecar type.
+    const std::filesystem::path dataDir( OMNIGRID_DATA_DIR );
+    const BlockRegistry blocks = loadRealBlocks();
+    const SidecarRegistry sidecars = loadRealSidecars();
+    PrototypeRegistry prototypes;
+    const bool loaded = RegistryLoader::loadPrototypes( dataDir, blocks, prototypes, &sidecars );
+
+    CHECK( loaded );
+    CHECK_EQ( prototypes.size(), std::size_t{ 1 } );
+    const PrototypeDef *cactus = prototypes.find( "default:cactus" );
+    CHECK( cactus != nullptr );
+    if( cactus )
+        CHECK_EQ( cactus->properties.size(), std::size_t{ 1 } );
 }
 
 TEST_CASE( prototypes_block_bridge_resolves_pilot_block )

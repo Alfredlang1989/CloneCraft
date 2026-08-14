@@ -710,7 +710,8 @@ namespace world
     }
 
     void RegistryLoader::parsePrototypes( const json &root, const std::string &source,
-                                          const BlockRegistry &blocks, PrototypeRegistry &out )
+                                          const BlockRegistry &blocks, PrototypeRegistry &out,
+                                          const SidecarRegistry *sidecars )
     {
         if( !root.is_object() || !root.contains( "prototypes" ) || !root["prototypes"].is_array() )
             throw RegistryError( source + ": expected an object with a 'prototypes' array" );
@@ -795,6 +796,34 @@ namespace world
                         throw RegistryError( context( source, index ) +
                                              ": property '" + propertyDef.id +
                                              "' defaultValue must be a number" );
+
+                    // M05 round 2: prototype properties are validated against
+                    // sidecars.json at load time (ADR-027). A property without
+                    // a backing sidecar type, or a default that cannot be
+                    // stored by that type, is a broken mod - reject it instead
+                    // of producing the has()==true / get()==nullopt
+                    // schizophrenia later.
+                    if( sidecars )
+                    {
+                        const SidecarDef *sidecar = sidecars->find( propertyDef.id );
+                        if( !sidecar )
+                            throw RegistryError( context( source, index ) +
+                                                 ": prototype '" + def.id +
+                                                 "' declares property '" + propertyDef.id +
+                                                 "' which is not a registered sidecar type" );
+                        if( !world::valueFitsSidecarDef( *sidecar, propertyDef.defaultValue ) )
+                        {
+                            const std::string valueText =
+                                std::holds_alternative<std::uint32_t>( propertyDef.defaultValue )
+                                    ? std::to_string( std::get<std::uint32_t>( propertyDef.defaultValue ) )
+                                    : std::to_string( std::get<float>( propertyDef.defaultValue ) );
+                            throw RegistryError( context( source, index ) +
+                                                 ": prototype '" + def.id +
+                                                 "' property '" + propertyDef.id +
+                                                 "' default " + valueText +
+                                                 " does not fit sidecar type '" + propertyDef.id + "'" );
+                        }
+                    }
                     def.properties.push_back( std::move( propertyDef ) );
                 }
             }
@@ -815,9 +844,10 @@ namespace world
         }
     }
 
-    bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
-                                         const BlockRegistry &blocks,
-                                         PrototypeRegistry &out )
+bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
+                                     const BlockRegistry &blocks,
+                                     PrototypeRegistry &out,
+                                     const SidecarRegistry *sidecars )
     {
         const auto prototypesPath = dir / "prototypes.json";
         std::error_code error;
@@ -826,7 +856,7 @@ namespace world
 
         parsePrototypes( parseJson( readTextFile( prototypesPath, "prototypes.json" ),
                                     prototypesPath.string() ),
-                         prototypesPath.string(), blocks, out );
+                         prototypesPath.string(), blocks, out, sidecars );
         return true;
     }
 

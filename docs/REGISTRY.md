@@ -163,12 +163,18 @@ rejected for `float` value types.
 ### Runtime sidecar framework
 
 `world::Sidecar<T>` (src/world/chunk/Sidecar.h) is the generic sparse
-per-chunk store: empty until the first `set()`, entries removed when written
-back to the default, deterministic ascending local-index iteration for later
-serialization (M09). `set()` reports whether the stored state actually
-changed, so callers can skip dirty/change notifications for no-ops; writes
-outside the configured capacity (`Chunk::VOLUME` on the chunk path) are
-rejected, closing the future deserialization trap (M09). `BlockOrientation`
+per-chunk store: empty until the first `set()`/`setWithDefault()`, entries
+removed when written back to the object's removal default or via the explicit
+`remove()`, deterministic ascending local-index iteration for later
+serialization (M09). The prototype-aware `setWithDefault(localIndex, value,
+removalDefault)` decides removal against the default supplied *per call*, so
+two objects sharing one sidecar type never lose values to a chunk-wide baked
+default (write-order independence, M05 review round 2). `set()` keeps the
+classic "own default" semantics for the typed `OrientationSidecar` pilot.
+Writes report whether the stored state actually changed, so callers can skip
+dirty/change notifications for no-ops; writes outside the configured capacity
+(`Chunk::VOLUME` on the chunk path) are rejected, closing the future
+deserialization trap (M09). `BlockOrientation`
 (Up/Down/North/South/East/West; `bitWidth: 3` is a serialization/storage hint,
 the pilot's physical storage is a sparse map entry) is the pilot type; the
 chunk stores it (like every sidecar type) as a generic `PropertyValue` sidecar
@@ -194,25 +200,40 @@ whether a value comes from a prototype default, a stored sidecar entry or
 
 - `has(address, propertyId)` answers **"does this object support the
   property?"** — true exactly when the block's prototype declares the
-  property in `prototype.properties`. It is a logical capability, independent
-  of stored state. AIR, unloaded chunks and plain scenery blocks without a
-  prototype own no properties (`has` = false).
+  property in `prototype.properties` **and** that id resolves to a registered
+  sidecar type. It is a logical capability, independent of stored state.
+  AIR, unloaded chunks and plain scenery blocks without a prototype own no
+  properties (`has` = false). The sidecar-resolution check keeps `has()`/
+  `get()`/`set()` consistent even for content that was loaded without the
+  cross-validation gate (no "declared but unresolvable" schizophrenia).
 - `get()` resolves the stored override, then the prototype-specific default
   (prototypes.json), then the sidecar type default (`sidecars.json`); only
   unknown property ids return `nullopt`.
 - `set()` stores a per-block override of the prototype default. It rejects
   undeclared/unknown property ids, values that do not fit the declared
   `valueType` (uint8/16/32 range **and** `bitWidth`) and AIR positions, and
-  never creates chunks. Writing the logical default removes the override.
+  never creates chunks. Writing the object's logical default removes the
+  override.
+
+Removal is prototype-aware and write-order independent: two prototypes may
+share one sidecar type in the same chunk with different logical defaults
+(`Sidecar::setWithDefault` decides against the object's own default per write,
+never against a chunk-wide baked default), so a value written for prototype A
+can never be silently dropped just because prototype B created the sidecar
+first.
 
 `WorldState` is also the single central block-mutation entry point (`setBlock`)
 with granular change hooks (`what` = `"block"` or the property id), mesh/
 neighbour invalidation (boundary blocks notify their adjacent chunks for block
-*and* property changes) and a `PersistenceSink` abstraction. The reference
+*and* property changes) and a `PersistenceSink` abstraction. `setBlock` rejects
+runtime ids outside the `BlockIdTable` (the central mutation never stores
+corrupt voxel data) and never materializes a chunk for a vacuous AIR write on
+an unloaded position (no empty-chunk graveyards). The reference
 `MemoryPersistenceSink` records dirty chunks and last-write-wins deltas;
 `PropertyDelta` carries the final property value (or `nullopt` when an
 override was removed by a default write or a block replacement), and
-`persist: false` sidecars never reach the sink. ChunkManager keeps
+`persist: false` sidecars never reach the sink — on the normal `set()` path
+*and* on the block-replacement path. ChunkManager keeps
 `setBlockOrientation`/`blockOrientation` as convenience shims over the
 generic `core:orientation` sidecar — the shim and the unified world state
 read and write the exact same storage.
@@ -235,16 +256,22 @@ content root without prototypes is legal.
 Each `properties` entry declares:
 
 | Field | Type | Required | Meaning |
-|---|---:|---:|---|
-| `id` | string | yes | sidecar property id (must exist in `sidecars.json` for the value to resolve) |
+|---|---|---:|---:|---|
+| `id` | string | yes | sidecar property id (must exist in `sidecars.json`) |
 | `defaultValue` | number | yes | object-type default exposed by `get()` (integer or float) |
 
 Validation: duplicate ids, non-namespaced ids, unknown `blockId` references,
 duplicate capabilities, unknown fields, non-array `properties`, duplicate
 property ids, missing/non-numeric `defaultValue` and unknown property fields
-are rejected with source/entry context. Prototype property defaults are
-matched against the sidecar type at runtime: a default that does not fit the
-declared `valueType`/`bitWidth` falls back to the sidecar type's own default.
+are rejected with source/entry context. When prototypes are loaded together
+with `sidecars.json` (the Application load order), each declared property is
+additionally validated at load time (ADR-027): the property id must resolve to
+a registered sidecar type, and the prototype default must fit that type's
+declared `valueType`/`bitWidth`. A mod that declares a property without a
+backing sidecar type, or a default that cannot be stored (e.g. `255` for a
+3-bit `core:orientation`), is rejected instead of silently degrading later.
+The parse gate is opt-in for programmatic content; the runtime `has()` guard
+keeps the API consistent for any construction path.
 
 ### Runtime prototype handles
 

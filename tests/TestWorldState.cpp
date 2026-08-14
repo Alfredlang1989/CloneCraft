@@ -74,14 +74,16 @@ namespace
             orientedId = idTable.indexOf( "test:oriented" );
             plainId = idTable.indexOf( "test:plain" );
 
+            // Sidecars are parsed before prototypes so the prototype property
+            // declarations are validated against them at load time (ADR-027).
+            sidecars = parseSidecars( sidecarsJson );
             const json prototypeJson = json::parse(
                 R"({"prototypes":[
                     { "id": "test:oriented", "displayName": "Oriented", "blockId": "test:oriented",
                       "properties": )" + propertiesJson + R"( }
                 ]})" );
             world::RegistryLoader::parsePrototypes( prototypeJson, "test-prototypes.json",
-                                                    blocks, prototypes );
-            sidecars = parseSidecars( sidecarsJson );
+                                                    blocks, prototypes, &sidecars );
             state = std::make_unique<world::WorldState>( manager, idTable, sidecars, prototypes );
         }
     };
@@ -357,6 +359,161 @@ TEST_CASE( world_state_orientation_is_cleared_when_block_is_removed )
     CHECK( !f.state->get( B1, world::CORE_ORIENTATION_SIDECAR ).has_value() );
     CHECK( !f.manager.blockOrientation( B1 ).has_value() );
     CHECK_EQ( sink.blockDeltas().at( B1 ).newRuntimeId, 0u );
+}
+
+TEST_CASE( world_state_shared_property_defaults_are_write_order_independent )
+{
+    // Two prototypes share sidecar "mod:p" inside one chunk with different
+    // logical defaults (A = 0, B = 1). The sidecar's remove-again decision
+    // must use the object's own logical default per write, never a
+    // chunk-wide baked default: B creating the sidecar first must not make
+    // A's value 1 "disappear" (M05 review round 2, HIGH).
+    const std::string sidecars = R"({"sidecars":[
+        { "id": "mod:p", "displayName": "P", "valueType": "uint8", "defaultValue": 0 } ]})";
+
+    const auto build = [&]() {
+        struct World
+        {
+            world::BlockRegistry blocks;
+            world::BlockIdTable idTable;
+            world::PrototypeRegistry prototypes;
+            world::SidecarRegistry sidecars;
+            world::ChunkManager manager;
+            std::unique_ptr<world::WorldState> state;
+            std::uint16_t idA = 0u;
+            std::uint16_t idB = 0u;
+        } w;
+        w.blocks.insert( makeBlock( "core:air", "Air" ) );
+        w.blocks.insert( makeBlock( "test:a", "A" ) );
+        w.blocks.insert( makeBlock( "test:b", "B" ) );
+        w.idTable = world::BlockIdTable( w.blocks );
+        w.idA = w.idTable.indexOf( "test:a" );
+        w.idB = w.idTable.indexOf( "test:b" );
+        w.sidecars = parseSidecars( sidecars );
+        const json prototypeJson = json::parse(
+            R"({"prototypes":[
+                { "id": "test:a", "displayName": "A", "blockId": "test:a",
+                  "properties": [ { "id": "mod:p", "defaultValue": 0 } ] },
+                { "id": "test:b", "displayName": "B", "blockId": "test:b",
+                  "properties": [ { "id": "mod:p", "defaultValue": 1 } ] }
+            ]})" );
+        world::RegistryLoader::parsePrototypes( prototypeJson, "test-prototypes.json",
+                                                w.blocks, w.prototypes, &w.sidecars );
+        w.state =
+            std::make_unique<world::WorldState>( w.manager, w.idTable, w.sidecars, w.prototypes );
+        return w;
+    };
+
+    // Order 1: B creates the sidecar first (a chunk-wide baked default would
+    // be B's 1, the exact trap the review reproduced).
+    {
+        auto w = build();
+        const world::BlockAddress a = world::fromOriginOffset( 3, 7, 9 );
+        const world::BlockAddress b = world::fromOriginOffset( 4, 7, 9 );
+        CHECK( w.state->setBlock( a, w.idA ) );
+        CHECK( w.state->setBlock( b, w.idB ) );
+        CHECK( w.state->set( b, "mod:p", world::PropertyValue{ 2u } ) ); // B override
+        CHECK( w.state->set( a, "mod:p", world::PropertyValue{ 1u } ) ); // 1 != A default 0
+        CHECK( w.state->get( a, "mod:p" ) == world::PropertyValue{ 1u } ); // NOT lost
+        CHECK( w.state->get( b, "mod:p" ) == world::PropertyValue{ 2u } );
+        // Writing each object's own logical default removes exactly its override.
+        CHECK( w.state->set( a, "mod:p", world::PropertyValue{ 0u } ) );
+        CHECK( w.state->get( a, "mod:p" ) == world::PropertyValue{ 0u } );
+        CHECK( w.state->set( b, "mod:p", world::PropertyValue{ 1u } ) );
+        CHECK( w.state->get( b, "mod:p" ) == world::PropertyValue{ 1u } );
+    }
+
+    // Order 2: A creates the sidecar first. Same final behaviour.
+    {
+        auto w = build();
+        const world::BlockAddress a = world::fromOriginOffset( 3, 7, 9 );
+        const world::BlockAddress b = world::fromOriginOffset( 4, 7, 9 );
+        CHECK( w.state->setBlock( a, w.idA ) );
+        CHECK( w.state->setBlock( b, w.idB ) );
+        CHECK( w.state->set( a, "mod:p", world::PropertyValue{ 2u } ) ); // A override
+        CHECK( w.state->set( b, "mod:p", world::PropertyValue{ 3u } ) ); // B override
+        CHECK( w.state->set( a, "mod:p", world::PropertyValue{ 1u } ) ); // A override 1 kept
+        CHECK( w.state->get( a, "mod:p" ) == world::PropertyValue{ 1u } );
+        CHECK( w.state->get( b, "mod:p" ) == world::PropertyValue{ 3u } );
+        CHECK( w.state->set( a, "mod:p", world::PropertyValue{ 0u } ) ); // A default: removed
+        CHECK( w.state->get( b, "mod:p" ) == world::PropertyValue{ 3u } ); // B unaffected
+    }
+}
+
+TEST_CASE( world_state_persist_false_property_is_not_reported_when_block_is_replaced )
+{
+    const std::string sidecars = R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "Orientation", "valueType": "uint8",
+          "defaultValue": 0, "bitWidth": 3, "storage": "sparse" },
+        { "id": "core:transient", "displayName": "Transient", "valueType": "uint8",
+          "defaultValue": 0, "persist": false } ]})";
+    const std::string properties =
+        R"([ { "id": "core:orientation", "defaultValue": 0 },
+             { "id": "core:transient", "defaultValue": 0 } ])";
+    Fixture f( sidecars, properties );
+    world::MemoryPersistenceSink sink;
+    f.state->setPersistenceSink( &sink );
+
+    CHECK( f.state->setBlock( B1, f.orientedId ) );
+    CHECK( f.state->set( B1, "core:transient", world::PropertyValue{ 5u } ) );
+    CHECK_EQ( sink.propertyDeltaCount(), std::size_t{ 0 } ); // persist:false: never reaches sink
+
+    // Replacing the block must not suddenly leak a persist:false removal
+    // delta (M05 review round 2: the normal set() path was fixed, the block
+    // replacement path was not).
+    CHECK( f.state->setBlock( B1, 0u ) );
+    CHECK_EQ( sink.propertyDeltaCount(), std::size_t{ 0 } );
+    CHECK_EQ( sink.blockDeltaCount(), std::size_t{ 1 } ); // only the block delta
+}
+
+TEST_CASE( world_state_set_block_rejects_invalid_runtime_ids )
+{
+    Fixture f;
+    world::MemoryPersistenceSink sink;
+    f.state->setPersistenceSink( &sink );
+    CHECK_EQ( f.manager.chunkCount(), std::size_t{ 0 } );
+
+    CHECK( !f.state->setBlock( B1, static_cast<std::uint16_t>( 0xFFFFu ) ) );
+    CHECK_EQ( f.manager.chunkCount(), std::size_t{ 0 } ); // rejected: nothing materialized
+    CHECK_EQ( sink.blockDeltaCount(), std::size_t{ 0 } );
+    CHECK( !f.state->blockAt( B1 ).has_value() );
+}
+
+TEST_CASE( world_state_air_noop_on_unloaded_position_never_creates_chunks )
+{
+    Fixture f;
+    CHECK_EQ( f.manager.chunkCount(), std::size_t{ 0 } );
+    CHECK( !f.state->setBlock( B1, 0u ) ); // AIR on unloaded: vacuous no-op
+    CHECK_EQ( f.manager.chunkCount(), std::size_t{ 0 } ); // no empty-chunk graveyard
+}
+
+TEST_CASE( world_state_prototype_declaring_missing_sidecar_has_no_capability )
+{
+    // Content loaded without the sidecar cross-validation gate (e.g. a
+    // programmatic registry) must not produce has()/get()/set() schizophrenia:
+    // has() refuses a property id with no registered sidecar type (M05
+    // review round 2). The Application always validates, this guards the
+    // API for any other construction path.
+    world::BlockRegistry blocks;
+    blocks.insert( makeBlock( "core:air", "Air" ) );
+    blocks.insert( makeBlock( "test:oriented", "Oriented" ) );
+    const world::BlockIdTable idTable( blocks );
+    world::PrototypeRegistry prototypes;
+    const json prototypeJson = json::parse(
+        R"({"prototypes":[
+            { "id": "test:oriented", "displayName": "Oriented", "blockId": "test:oriented",
+              "properties": [ { "id": "core:ghost", "defaultValue": 0 } ] }
+        ]})" );
+    world::RegistryLoader::parsePrototypes( prototypeJson, "test-prototypes.json",
+                                            blocks, prototypes ); // no sidecars gate
+    world::SidecarRegistry sidecars; // empty: core:ghost resolves to nothing
+    world::ChunkManager manager;
+    world::WorldState state( manager, idTable, sidecars, prototypes );
+
+    CHECK( state.setBlock( B1, idTable.indexOf( "test:oriented" ) ) );
+    CHECK( !state.has( B1, "core:ghost" ) );
+    CHECK( !state.get( B1, "core:ghost" ).has_value() );
+    CHECK( !state.set( B1, "core:ghost", world::PropertyValue{ 0u } ) );
 }
 
 int main() { return test::runAll(); }

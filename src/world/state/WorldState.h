@@ -24,11 +24,12 @@ namespace world
      *
      * The world state is prototype-aware (the M05 review gate): a property
      * exists for an object only when the object's prototype declares it in
-     * `prototype.properties` (prototypes.json). Plain scenery blocks without a
-     * prototype, AIR and unloaded chunks own no properties:
+     * `prototype.properties` (prototypes.json) AND that property id resolves
+     * to a registered sidecar type (sidecars.json). Plain scenery blocks
+     * without a prototype, AIR and unloaded chunks own no properties:
      *  - has(): "does this object support property X" (logical capability) -
-     *    true exactly when the block's prototype declares X, independent of
-     *    stored state.
+     *    true exactly when the block's prototype declares X and the id maps
+     *    to a registered sidecar type, independent of stored state.
      *  - get(): the stored override if one exists, otherwise the
      *    prototype-specific default, otherwise the sidecar type default;
      *    nullopt when the object does not declare the property.
@@ -37,6 +38,13 @@ namespace world
      *    is unknown, when the value does not fit the declared sidecar type
      *    (including bitWidth) or on AIR/unloaded positions - and never
      *    creates chunks. Writing the logical default removes the override.
+     *
+     * Removal is prototype-aware: two prototypes may share one sidecar type
+     * with different logical defaults in the same chunk. The sidecar's
+     * "remove the override again" decision is taken against the object's own
+     * logical default per write, never against a chunk-wide baked default, so
+     * world-state behaviour is independent of which object first created the
+     * sidecar (write-order independence, M05 review round 2).
      *
      * Mutations are centralised here: gameplay code must not reach into
      * ChunkManager directly (M06 action path depends on that). Worldgen base
@@ -59,7 +67,11 @@ namespace world
         // -- central block mutation ------------------------------------------
         /** @return true when the block actually changed (no-op writes are
          *  not dirty and not persisted). Replacing a block invalidates its
-         *  property overrides and reports their removal to the sink. */
+         *  property overrides and reports their removal to the sink.
+         *  Invalid runtime block ids (outside the BlockIdTable) and AIR
+         *  writes to unloaded positions are rejected: this central mutation
+         *  never stores corrupt voxel data and never materializes a chunk
+         *  for a vacuous write. */
         bool setBlock( const BlockAddress &, std::uint16_t runtimeId );
         /** Loaded block at the position, nullopt for unloaded chunks. */
         std::optional<std::uint16_t> blockAt( const BlockAddress & ) const;
@@ -81,7 +93,6 @@ namespace world
         const PrototypeDef *prototypeAt( const BlockAddress & ) const;
         const PrototypePropertyDef *propertyDecl( const PrototypeDef &,
                                                   const std::string &propertyId ) const;
-        bool valueFitsSidecarDef( const SidecarDef &, const PropertyValue & ) const;
         PropertyValue logicalDefaultFor( const PrototypeDef &, const SidecarDef &,
                                          const PrototypePropertyDef & ) const;
         void emitChange( const BlockAddress &, const std::string &what );

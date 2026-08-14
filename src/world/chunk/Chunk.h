@@ -49,9 +49,12 @@ namespace world
             // Replacing the block (including by AIR) invalidates it, so the
             // entry is dropped here. Without this a removed block would leave
             // a zombie sidecar entry behind (issue #3 section 5 invariant).
+            // Removal is explicit (never a default-value write) so no entry
+            // can survive at the wrong value when the old logical default
+            // differs from the block that previously owned it (M05 round 2).
             for( auto it = mSidecars.begin(); it != mSidecars.end(); )
             {
-                it->second->set( localIndex, it->second->defaultValue() );
+                it->second->remove( localIndex );
                 if( it->second->empty() ) it = mSidecars.erase( it );
                 else ++it;
             }
@@ -89,9 +92,11 @@ namespace world
         // members are added to Chunk (M04 review constraint).
 
         /**
-         * Sets a property value for localIndex. Writing the type's declared
-         * default removes the entry; when the last entry disappears the
-         * sidecar is dropped again.
+         * Sets a property value for localIndex. `defaultValue` is the
+         * *logical default of the object being written* (prototype-aware M05):
+         * writing that value removes the override again (lazy destruction),
+         * regardless of which object created the sidecar first. When the last
+         * entry disappears the sidecar is dropped again.
          * @return true when the stored state actually changed.
          * @note Invariant (issue #3 section 5): sidecar state exists only
          *       while at least one block actually needs it. AIR blocks can
@@ -114,13 +119,13 @@ namespace world
                                    std::make_unique<Sidecar<PropertyValue>>( defaultValue, VOLUME ) )
                          .first;
             }
-            const bool changed = it->second->set( localIndex, value );
+            const bool changed = it->second->setWithDefault( localIndex, value, defaultValue );
             if( it->second->empty() )
                 mSidecars.erase( it ); // lazy destruction
             return changed;
         }
 
-        /** Absent entry means the block holds the type's declared default. */
+        /** Absent entry means the block holds its object's logical default. */
         std::optional<PropertyValue> getProperty( std::uint32_t localIndex,
                                                   const std::string &typeId ) const
         {

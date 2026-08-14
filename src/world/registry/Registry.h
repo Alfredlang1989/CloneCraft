@@ -338,4 +338,41 @@ namespace world
 
     using SidecarRegistry = Registry<SidecarDef>;
 
+    /**
+     * Whether a PropertyValue fits a sidecar type's declared valueType and
+     * compact bitWidth. Shared single source of truth used both at load time
+     * (prototype properties are validated against sidecars.json, ADR-027) and
+     * at runtime (WorldState::set gate), so a value that the registry accepts
+     * can never be rejected by the resolver and vice versa.
+     */
+    inline bool valueFitsSidecarDef( const SidecarDef &def, const PropertyValue &value )
+    {
+        if( def.valueType == SidecarValueType::Float )
+            return std::holds_alternative<float>( value );
+        if( !std::holds_alternative<std::uint32_t>( value ) )
+            return false;
+        const std::uint64_t v = std::get<std::uint32_t>( value );
+        switch( def.valueType )
+        {
+            case SidecarValueType::Uint8:
+                if( v > 0xFFu ) return false;
+                break;
+            case SidecarValueType::Uint16:
+                if( v > 0xFFFFu ) return false;
+                break;
+            case SidecarValueType::Uint32:
+                break;
+            case SidecarValueType::Float:
+                return false; // handled above
+        }
+        if( def.bitWidth != 0u )
+        {
+            if( def.bitWidth >= 32u )
+                return true; // full uint32 range
+            if( v >= ( static_cast<std::uint64_t>( 1u ) << def.bitWidth ) )
+                return false; // value does not fit the declared compact width
+        }
+        return true;
+    }
+
 } // namespace world

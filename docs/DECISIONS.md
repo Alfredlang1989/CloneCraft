@@ -330,3 +330,62 @@ writes scale poorly once multiple sidecar types exist.
   the unified mutation path — it is content loading, not gameplay mutation.
 - The M04 review constraint stands: adding `mTemperature`/`mDamage`/`mPower`
   as more `unique_ptr` members to Chunk is forbidden.
+
+## ADR-028 - Prototype-aware property removal is write-order independent (M05 review round 2)
+
+**Decision:** A sidecar's "writing the default removes the override" decision is made
+against the *object's own logical default* supplied per write (`Sidecar::setWithDefault`),
+never against a chunk-wide baked default. Two prototypes may share one sidecar type in
+the same chunk with different logical defaults; whichever object first created the
+sidecar cannot change how another object's values behave. `Chunk::setBlock` clears a
+replaced block's sidecar entries with an explicit `remove()`, never by writing a
+(possibly wrong) stored default.
+
+**Why:** Prototype-specific defaults are the whole point of the M05 prototype-aware
+resolver (a property value is meaningful relative to the object that owns it). If the
+sidecar baked in the first writer's default, a second prototype writing that same
+numeric value would see it "equal to the default" and drop a real override. That is a
+deterministic, write-order-dependent world-state bug — exactly the class that becomes
+poisonous once mods share one engine (M06+).
+
+**Consequences:**
+
+- `WorldState::set()` always passes the object's logical default
+  (prototype default if it fits the sidecar type, else the sidecar type default) as the
+  removal threshold; the stored sidecar default is only a fallback for the typed
+  orientation pilot (`Sidecar::set`).
+- `Chunk::setBlock` invalidates a replaced block's sidecar state with explicit removal,
+  so no zombie entry can survive at a value that meant something under the previous owner.
+- Regression: two prototypes sharing `mod:p` with defaults 0/1 in one chunk keep both
+  overrides regardless of write order (TestWorldState).
+
+## ADR-029 - Prototype properties are cross-validated against sidecars.json at load time
+
+**Decision:** Prototype property declarations are validated against `sidecars.json` at
+load time: every declared property id must resolve to a registered sidecar type, and the
+prototype default must fit that type's declared `valueType`/`bitWidth`. `WorldState::has`
+also refuses property ids that resolve to no sidecar type, so `has()`/`get()`/`set()`
+cannot diverge even for content loaded without the gate. `WorldState::setBlock` rejects
+runtime ids outside the `BlockIdTable` and never materializes a chunk for a vacuous AIR
+write on an unloaded position.
+
+**Why:** ADR-027 claimed "validated at load time" for prototype properties, but the parser
+had no sidecar registry at parse time and the Application loaded prototypes before
+sidecars. A prototype could declare `mod:missing` with no backing sidecar, producing
+`has()==true / get()==nullopt / set()==false` — a broken mod reported as a working one.
+`setBlock` accepting any `uint16_t` (e.g. `65535`) let the central validated mutation
+store corrupt voxel data, and an AIR no-op on an unloaded position created empty chunks.
+
+**Consequences:**
+
+- Sidecars are loaded before prototypes; `loadPrototypes`/`parsePrototypes` accept an
+  optional `SidecarRegistry` and reject unknown property ids and non-fitting defaults
+  with source context (a broken mod fails loudly, not silently).
+- The runtime `has()` sidecar-resolution check keeps the API self-consistent for
+  programmatic registries that skip the parse gate.
+- `WorldState::setBlock` validates the runtime id against `BlockIdTable::size()` and
+  `ChunkManager::setBlock` treats AIR-on-unloaded as a vacuous no-op (no chunk
+  materialized); non-AIR writes still create the chunk (the materialisation API).
+- Regression tests: prototypes gate rejection + default-mod validation, has()/get()/set()
+  consistency for a declared-but-unresolvable property, setBlock invalid-id rejection,
+  and AIR no-op residency.

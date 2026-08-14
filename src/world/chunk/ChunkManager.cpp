@@ -84,7 +84,16 @@ namespace world
 
     bool ChunkManager::setBlock( const BlockAddress &b, std::uint16_t blockId )
     {
-        Chunk *chunk = getOrCreateChunk( b.chunk );
+        Chunk *chunk = chunkAt( b.chunk );
+        if( !chunk )
+        {
+            // Writing AIR into an unloaded position is a vacuous no-op: never
+            // materialize a chunk just to learn that an all-air write changed
+            // nothing (empty-chunk graveyards from no-op actions, M05 round 2).
+            if( blockId == 0u )
+                return false;
+            chunk = getOrCreateChunk( b.chunk );
+        }
         const std::uint16_t previous = chunk->block( b.block.x, b.block.y, b.block.z );
         if( previous == blockId ) return false;
         chunk->setBlock( b.block.x, b.block.y, b.block.z, blockId );

@@ -132,6 +132,20 @@ Kept as history; the roadmap below replaces them as the current plan.
   (`mTemperature`/`mDamage`/`mPower` as more `unique_ptr`s is forbidden) —
   M05 brings the registry-driven resolver that stores values for any declared
   sidecar type.
+  Status (review round 2, issue #3): **NEEDS FIXES -> fixed**. The round-2
+  review found the multi-prototype/mod-system edge cases and all are closed:
+  prototype-specific defaults are now write-order independent
+  (`Sidecar::setWithDefault` decides removal against the object's own logical
+  default per write; `Chunk::setBlock` clears with explicit `remove()` — two
+  prototypes sharing `mod:p` with defaults 0/1 keep both overrides regardless
+  of order); `persist: false` is filtered on the block-replacement path as
+  well; prototype properties are cross-validated against `sidecars.json` at
+  load time (sidecars load first; unknown property ids and non-fitting
+  defaults are rejected) and `has()` refuses unresolvable ids; `setBlock`
+  rejects runtime ids outside the `BlockIdTable`; and an AIR no-op on an
+  unloaded position no longer materializes a chunk. Suites now:
+  `world_state` 22 cases, `sidecars` 20 cases, `prototypes` 17 cases;
+  gates PASS (20/20 ctest, architecture, clang-tidy/AST).
 
 - **M06 — #3 Minimal Actions + #18 Player Interaction ◻**
   Minimal actions `place_block` / `remove_block` with target/payload/result/

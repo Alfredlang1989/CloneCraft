@@ -42,10 +42,12 @@
   persistence policy and serialization version), `core:orientation` (bitWidth
   3) in MODS/Default, persistent prototype block-claims across load calls.
   Suites: `sidecars` 19 cases, `prototypes` 13 cases, 19/19 PASS.
-- M05 — Unified world state (#3): **done**. `world::WorldState` (new
+- M05 — Unified world state (#3): **done (round-2 fixes committed)**.
+  `world::WorldState` (new
   `world.state` module) is the single game-facing entry point and is
   **prototype-aware**: `has` = "does this object support the property"
-  (prototype declares it; AIR/unloaded/scenery own none), `get` resolves
+  (prototype declares it AND the id resolves to a registered sidecar type;
+  AIR/unloaded/scenery own none), `get` resolves
   stored override -> prototype default -> sidecar type default, `set` stores
   a per-block override of the prototype default with runtime `valueType`/
   `bitWidth` validation and rejects undeclared/unknown ids and AIR positions
@@ -61,6 +63,17 @@
   orientation pilot survives as a ChunkManager shim over the same
   `core:orientation` sidecar. Suites: `world_state` 17 cases, `sidecars` 20
   cases, `prototypes` 14 cases, 20/20 PASS.
+  Round-2 review (#3) findings closed: prototype-specific defaults are now
+  write-order independent (`Sidecar::setWithDefault` + explicit `remove()`;
+  two prototypes sharing one property with defaults 0/1 in one chunk keep
+  both overrides regardless of order), `persist: false` is filtered on the
+  block-replacement path too, prototype properties are cross-validated
+  against `sidecars.json` at load time (sidecars load first; unknown ids and
+  non-fitting defaults rejected) with `has()` refusing unresolvable ids,
+  `setBlock` rejects runtime ids outside the `BlockIdTable`, and an AIR no-op
+  on an unloaded position never materializes a chunk. Suites now:
+  `world_state` 22 cases, `sidecars` 20 cases, `prototypes` 17 cases;
+  gates PASS (20/20 ctest, architecture, clang-tidy/AST).
 - Core spine #3 (world state/actions/events/enTT/RocksDB),
   #18 (player interaction), #7 (Lua callback cache), #13 (client/server),
   #16/#17 (construction): **not started**.
@@ -70,7 +83,9 @@
   (new `content_root` + `prototypes` suites). At M04 time 19/19 suites (new
   `sidecars` suite; after the review-fix pass `sidecars` has 19 cases and
   `prototypes` 13 cases). At M05 time 20/20 suites (new `world_state` suite,
-  module `world.state` added to the architecture rules).
+  module `world.state` added to the architecture rules). After the M05
+  round-2 fix pass 20/20 suites still PASS, with `world_state` grown to 22
+  cases and `prototypes` to 17 cases.
 
 ## Current state
 

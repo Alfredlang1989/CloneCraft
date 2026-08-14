@@ -99,12 +99,16 @@ namespace app
             catch( const world::RegistryError &error ) { core::logError( std::string( "Registry load failed: " ) + error.what() ); return false; }
             mIdTable = world::BlockIdTable( mBlocks );
             try {
-                world::RegistryLoader::loadPrototypes( mContentRoot.path, mBlocks, mPrototypes );
-            } catch( const world::RegistryError &error ) { core::logError( std::string( "Prototype registry load failed: " ) + error.what() ); return false; }
-            mPrototypeIds = std::make_unique<world::PrototypeIdTable>( mPrototypes );
-            try {
+                // Sidecars are loaded before prototypes so prototype
+                // properties can be validated against them at load time
+                // (ADR-027): a property without a backing sidecar type or a
+                // default that does not fit is rejected here.
                 world::RegistryLoader::loadSidecars( mContentRoot.path, mSidecars );
             } catch( const world::RegistryError &error ) { core::logError( std::string( "Sidecar registry load failed: " ) + error.what() ); return false; }
+            try {
+                world::RegistryLoader::loadPrototypes( mContentRoot.path, mBlocks, mPrototypes, &mSidecars );
+            } catch( const world::RegistryError &error ) { core::logError( std::string( "Prototype registry load failed: " ) + error.what() ); return false; }
+            mPrototypeIds = std::make_unique<world::PrototypeIdTable>( mPrototypes );
             core::logInfo( "Registered " + std::to_string( mPrototypes.size() ) + " prototype(s) and " +
                            std::to_string( mSidecars.size() ) + " sidecar type(s)" );
             mWorldState = std::make_unique<world::WorldState>( mChunks, mIdTable, mSidecars,

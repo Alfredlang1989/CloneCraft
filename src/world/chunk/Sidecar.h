@@ -12,12 +12,18 @@ namespace world
      * A sidecar exists only while at least one block in the chunk needs its
      * data (issue #3, section 5). Storage is fully lazy:
      *  - an empty Sidecar allocates nothing (empty map);
-     *  - the first set() creates the entry;
-     *  - setting a value back to the default removes the entry again, and a
+     *  - the first set()/setWithDefault() creates the entry;
+     *  - writing the removal default removes the entry again, and a
      *    Sidecar that becomes empty may be destroyed entirely by its owner.
      *
      * Entries are kept in ascending local-index order (std::map) so later
      * serialization (M09) iterates deterministically.
+     *
+     * Removal is decided against the value supplied per call
+     * (setWithDefault), not against a chunk-wide baked default, so objects
+     * with different logical defaults (prototype-aware M05) can share one
+     * sidecar type without losing values. set() keeps the classic
+     * "own default" behaviour for the typed OrientationSidecar pilot.
      */
     template <typename T>
     class Sidecar
@@ -39,9 +45,12 @@ namespace world
         Sidecar &operator=( const Sidecar & ) = delete;
 
         /**
-         * Stores value for localIndex. Writing the default value removes the
-         * entry (lazy destruction): the caller may then drop the sidecar
-         * entirely when it reports empty().
+         * Stores value for localIndex, removing the entry again when it
+         * equals this sidecar's own default (the M04 pilot semantics). For
+         * prototype-aware storage where different objects may expose the same
+         * property with different logical defaults, use setWithDefault()
+         * instead so the removal threshold is decided per object, not per
+         * chunk (M05 review round 2).
          *
          * @return true when the stored state actually changed; false when the
          *         value already was in that state, the write was the default
@@ -50,15 +59,39 @@ namespace world
          */
         bool set( std::uint32_t localIndex, T value )
         {
+            return setWithDefault( localIndex, value, mDefaultValue );
+        }
+
+        /**
+         * Prototype-aware variant: writing `removalDefault` removes the entry
+         * again (lazy destruction). Two prototypes sharing one sidecar type in
+         * the same chunk may pass their own logical defaults, so the removal
+         * decision never depends on which object created the sidecar first
+         * (write-order independence).
+         *
+         * @return true when the stored state actually changed; false when the
+         *         value already was in that state, the write was the removal
+         *         default while no entry existed, or localIndex is outside the
+         *         configured capacity.
+         */
+        bool setWithDefault( std::uint32_t localIndex, T value, T removalDefault )
+        {
             if( mCapacity != 0u && localIndex >= mCapacity )
                 return false;
-            if( value == mDefaultValue )
+            if( value == removalDefault )
                 return mEntries.erase( localIndex ) != 0u;
             const auto it = mEntries.find( localIndex );
             if( it != mEntries.end() && it->second == value )
                 return false;
             mEntries.insert_or_assign( localIndex, value );
             return true;
+        }
+
+        /** Explicitly removes the entry for localIndex.
+         *  @return true when an entry actually existed (state changed). */
+        bool remove( std::uint32_t localIndex )
+        {
+            return mEntries.erase( localIndex ) != 0u;
         }
 
         /** Absent entry == default value. */

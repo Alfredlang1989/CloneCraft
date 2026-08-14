@@ -50,14 +50,23 @@ namespace world
          * Returns false when the file is absent (a content root without
          * prototypes is legal); throws RegistryError on any parse or
          * validation problem.
+         *
+         * When `sidecars` is non-null, each prototype property is validated
+         * against sidecars.json at load time (ADR-027): the property id must
+         * resolve to a registered sidecar type and the prototype default must
+         * fit that type's valueType/bitWidth. A mod that declares a property
+         * without a backing sidecar type, or a default that cannot be stored,
+         * is rejected instead of silently degrading later.
          */
         static bool loadPrototypes( const std::filesystem::path &dir,
                                     const BlockRegistry &blocks,
-                                    PrototypeRegistry &out );
+                                    PrototypeRegistry &out,
+                                    const SidecarRegistry *sidecars = nullptr );
 
         /** Parses one already-read JSON document (used by tests). */
         static void parsePrototypes( const nlohmann::json &root, const std::string &source,
-                                     const BlockRegistry &blocks, PrototypeRegistry &out );
+                                     const BlockRegistry &blocks, PrototypeRegistry &out,
+                                     const SidecarRegistry *sidecars = nullptr );
 
         /**
          * Loads <dir>/sidecars.json into `out` when the file exists.
