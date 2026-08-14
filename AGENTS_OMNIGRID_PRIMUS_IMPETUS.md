@@ -1470,3 +1470,222 @@ Primus impetus ist erfolgreich, wenn OmniGrid eine gemeinsame, bewiesene Spine b
 - nachvollziehbare GitHub-Historie mit Issue ↔ Commit ↔ Milestone-Zuordnung.
 
 > **Small patches. Hard boundaries. Real proof cases. Green tests. Updated docs. Updated graph. Commit every milestone. Document it on GitHub. No second architecture.**
+
+---
+
+# 17. Verbindlicher P01-Streaming-/Residency-Vertrag für die erste Welle (#4 / #20)
+
+Diese Regeln konkretisieren P01 und sind für Implementierungen in der ersten Primus-Welle verbindlich. Die Details in GitHub #4 und #20 sind Teil der Arbeitsquelle und müssen vor P01-Arbeit vollständig gelesen werden.
+
+## 17.1 Vier getrennte Achsen
+
+Der Agent darf folgende Zustände nicht zu einem einzigen `loaded`/`unloaded`-Flag verschmelzen:
+
+1. **Materialization:** Welche registrierten Worldgen-/Content-Pässe sind für den Bereich bereits materialisiert?
+2. **World/Data Residency:** Welche logischen Chunk-/World-Daten müssen im RAM verfügbar bleiben?
+3. **Simulation Residency:** Welche Bereiche/Systeme müssen weiter simuliert werden?
+4. **Render Residency / LOD:** Welche visuelle Repräsentation muss CPU-/GPU-seitig existieren?
+
+Harte Regel:
+
+> **Nicht gerendert bedeutet nicht nicht simuliert.**
+
+Eine entfernte Fabrik/Maschine darf weiterlaufen, obwohl Ogre-Meshes, SceneNodes, LOD0 und GPU-Vertices bereits freigegeben wurden. Umgekehrt darf Far-LOD sichtbar sein, ohne dort vollständige Gameplay-Simulation zu aktivieren.
+
+Simulation kann erforderliche World/Data Residency nach sich ziehen. Sie erzwingt aber nicht automatisch Render Residency.
+
+## 17.2 Jeder Worldgen-/Materialization-Pass besitzt eigene data-driven Streaming-Metadaten
+
+Der C++-Core kennt keine fachlichen Passnamen wie `flowers`, `trees`, `villages`, `terrain` oder Mod-spezifische Inhalte.
+
+Ein Pass wird über stabile namespaced ID und registrierte Metadaten beschrieben.
+
+Jeder Pass muss konzeptionell mindestens separat konfigurieren können:
+
+- `load_radius`;
+- `keep_radius`;
+- Scheduling-/Materialization-Priority;
+- Retention-/Eviction-Policy;
+- optional eine namespaced Profile-Referenz.
+
+Grundinvariante:
+
+```text
+load_radius <= keep_radius
+```
+
+`load_radius` bestimmt, wann noch fehlende Pass-Arbeit eligible wird.
+
+`keep_radius` ist im Normalfall eine **Schutzgrenze**, kein Löschbefehl. Verlässt ein bereits materialisierter Pass seinen Keep-Radius, wird er nur für normale Eviction freigegeben.
+
+## 17.3 Explizite Hard-Eviction ist data-driven erlaubt
+
+Ein Pass/Profil darf ausdrücklich verlangen, dass State/Repräsentation außerhalb des Keep-Radius sofort entfernt wird, wenn dies ein bewusstes Gameplay-/Visual-Feature ist, z. B. ein Fog-/Horror-Mod.
+
+Das ist eine explizite Policy, nicht das Default-Verhalten.
+
+Der Core interpretiert nur generische Policy-Werte. Verboten sind Content-Sonderfälle wie:
+
+```text
+if pass == flowers
+if mod == fog_mod
+```
+
+## 17.4 Profile und Settings sind offen registrierbar
+
+Streaming-/Performance-Profile dürfen **kein geschlossenes C++-Enum** sein.
+
+Default Content darf Profile wie balanced/performance/quality mitbringen. Mods dürfen neue namespaced Profile hinzufügen.
+
+Spieler/Server dürfen relevante Werte über den normalen Settings-/Config-Vertrag individuell überschreiben.
+
+Daraus folgt für die Settings-Architektur:
+
+- keine neuen festen C++-Member für jeden neuen Worldgen-Pass;
+- generische namespaced Overrides für registrierte Pass-/Profil-Werte vorsehen;
+- Content Defaults + Profile + User/Runtime Overrides deterministisch zu einem Effective Value auflösen;
+- Schema/Validierung beibehalten.
+
+Die exakte Merge-Syntax ist Implementierungsdetail, aber **User Override gewinnt am Ende** für erlaubte Performance-/Streaming-Einstellungen.
+
+## 17.5 SLA-/Resource-Pressure ist data-driven
+
+Normale Degradation/Eviction darf durch konfigurierbare Ziele/Budgets gesteuert werden, soweit die Plattform die Metrik verlässlich bereitstellt.
+
+Mindestens als Architektur vorsehen:
+
+- RAM / resident World-Data Budget;
+- VRAM Budget;
+- FPS bzw. Frame-Time-Ziel;
+- GPU Utilization;
+- CPU Utilization;
+- Render-/Vertex-/Mesh-/GPU-Representation Budget.
+
+Diese Werte gehören in registrierbare Profile und dürfen individuell überschrieben werden.
+
+Ein einzelner schlechter Frame darf keine destruktive Eviction auslösen.
+
+FPS/CPU/GPU-basierte Pressure-Entscheidungen brauchen:
+
+- geglättete Messung / Zeitfenster;
+- Grace Period;
+- Trigger-Schwelle;
+- getrennte Recovery-Schwelle;
+- Recovery-Zeitfenster.
+
+Verboten ist ein Oszillator nach dem Muster:
+
+```text
+14.9 FPS -> evict
+16 FPS   -> reload
+14.9 FPS -> evict
+```
+
+Ein generischer interner Pressure-State wie NORMAL/ELEVATED/HIGH/CRITICAL ist erlaubt; exakte Namen sind Implementierungsdetail.
+
+## 17.6 Generation-, Residency- und Render-Budget sind getrennt
+
+Der Agent darf nicht einen einzigen Budget-Regler für alle Ressourcen verwenden.
+
+Mindestens unterscheiden:
+
+- **Generation/Materialization Budget:** Wie viel neue Pass-Arbeit darf gestartet werden?
+- **World/Data Residency Budget:** Wie viel bereits erzeugter logischer State darf resident bleiben?
+- **Render/GPU Budget:** Wie viel Mesh/LOD/Vertex/GPU-Repräsentation darf resident bleiben?
+
+Unter Druck soll eine sinnvolle Degradation möglich sein:
+
+```text
+neue niedrige Priorität drosseln
+-> billigere Render-Repräsentation
+-> evictable Low-Retention-State entfernen
+-> weitere Stufen nach Policy
+```
+
+Keine hartcodierte Reihenfolge nach Contentnamen. Pass/Profile liefern generische Priorität, Kosten und Retention-Metadaten.
+
+## 17.7 Hierarchische Sidecars sind die sparse World-Metadatenebene
+
+Für Chunk-/ChunkGroup-/Section-/Region-/Sector-Metadaten gilt #20.
+
+Wenn ein Zustand als sparse registrierte Property auf einer vorhandenen World-Hierarchieadresse ausdrückbar ist, darf P01 **nicht automatisch einen parallelen Spezialcontainer** erfinden.
+
+Insbesondere keine neuen Strukturen nur aus Bequemlichkeit wie:
+
+- `FactoryChunkState`;
+- `PinnedChunkTable`;
+- subsystem-spezifische Chunk-/Region-Flagstores;
+- separate Residency-Metadatenbank.
+
+Die generische Sidecar-Familie speichert typed Facts/Constraints. Scheduler/Services interpretieren sie.
+
+**Sidecar ist State, nicht Scheduler.**
+
+SLA-Berechnung, Eviction-Algorithmus, Renderplanung und Simulation Scheduling gehören nicht in den generischen Sidecar-Core.
+
+## 17.8 Chunk ist expliziter Sidecar-Ziellevel
+
+Neben bestehenden block-lokalen Sidecars müssen registrierte hierarchy-object Properties direkt auf `ChunkAddress` sowie auf ChunkGroup/Section/Region/Sector möglich sein.
+
+Chunk-Level-State darf nicht über einen künstlich reservierten lokalen Blockindex emuliert werden.
+
+Die gleichen Regeln gelten:
+
+- sparse/lazy;
+- Default-Schreiben entfernt expliziten State;
+- typed Registry Validation;
+- namespaced IDs;
+- `persist`/Versioning;
+- canonical hierarchy address, niemals global flatten.
+
+## 17.9 Residency Constraints / Pins
+
+Ein generischer Residency-Constraint kann z. B. World/Data oder Simulation als preferred/required markieren.
+
+`required` bzw. ein äquivalenter Hard-Pin bedeutet:
+
+> Normale Radius-/SLA-/Memory-/FPS-Eviction darf den dafür erforderlichen logischen State nicht entfernen, solange die Anforderung aktiv ist.
+
+Render Residency bleibt separat degradierbar, sofern sie nicht selbst explizit constrained ist.
+
+Mehrere Systeme können denselben Bereich gleichzeitig benötigen. Deshalb darf ein Hard-Pin **kein fragiles einzelnes Boolean** sein, das durch den ersten Release aller anderen Owner verloren geht.
+
+Der konsumierende Residency-/Simulation-Service muss unabhängige Owner/Reason/Reference-Anforderungen sicher abbilden können. Die konkrete Token-/Refcount-/Owner-Repräsentation bleibt Implementierungsdetail.
+
+Persistente Gameplay-Objekte sollen abgeleitete Runtime-Constraints bei Restore wiederherstellen, statt verwaiste ewige Pins zu hinterlassen.
+
+## 17.10 Pflichtbeweise P01/#20
+
+Mindestens folgende Fälle müssen bei Umsetzung testbar/diagnostizierbar werden:
+
+- zwei registrierte Pässe besitzen unterschiedliche Load- und Keep-Radien ohne Contentwissen im C++-Scheduler;
+- Verlassen des Keep-Radius macht normalen State evictable, löscht ihn bei gesunden Budgets aber nicht sofort;
+- explizite Hard-Eviction-Policy funktioniert data-driven;
+- Custom-Mod-Profil kann ohne neuen C++-Settings-Member registriert werden;
+- User Override verändert Effective Pass-/Profil-Werte deterministisch;
+- anhaltender FPS-/Resource-Pressure degradiert erst nach Hysterese/Grace und flattet nicht frameweise;
+- Recovery besitzt getrennte Schwelle/Zeit und erzeugt kein Reload-Thrashing;
+- Render Residency kann verschwinden, während required Simulation aktiv bleibt;
+- Chunk-/höhere Residency-Constraints laufen über #20 Sidecars statt parallelem Metadatensilo;
+- Chunk-Level-Property und block-lokale Property koexistieren eindeutig;
+- zwei unabhängige Residency-Owner verhindern, dass das Freigeben nur eines Owners den Bereich evictable macht.
+
+## 17.11 Zusätzliche STOP-Bedingungen für P01/#20
+
+**STOP und Architektur korrigieren**, wenn:
+
+- P01 einen fachlichen Passnamen im generischen C++-Scheduler special-cased;
+- Load-/Keep-Radien global hart verdrahtet werden, obwohl Pass-Metadaten vorgesehen sind;
+- Keep-Radius wieder als zwingender Unload-Befehl implementiert wird, ohne explizite Hard-Eviction-Policy;
+- FPS/CPU/GPU-Metrik ohne Hysterese/Grace direkt Evict/Reload triggert;
+- Profile als geschlossenes C++-Enum implementiert werden;
+- Settings für jeden Mod-Pass neue feste C++-Felder benötigen;
+- `not rendered` mit `not simulated` gleichgesetzt wird;
+- Simulation Residency automatisch volle Ogre-/LOD0-Residency erzwingt;
+- ein neuer per-Chunk/per-Group Metadata Store entsteht, obwohl #20 Sidecars denselben sparse State tragen können;
+- Sidecar-Core SLA-, Factory-, Portal-, Render- oder Simulation-Semantik verstehen soll;
+- ein einzelnes Boolean einen Multi-Owner-Hard-Pin repräsentiert und ein Owner fremde Requirements löschen kann.
+
+Dann gilt auch hier:
+
+> **Nicht den Sonderfall passend machen. Die generische Grenze passend machen.**
