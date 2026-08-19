@@ -40,8 +40,9 @@ Thumbs.db
 __pycache__/
 *.pyc
 
-# Agent tool state (regenerable, machine-local)
-.opencode/
+# Project agent harness is tracked; only generated local state is ignored
+.opencode/node_modules/
+.opencode/.cache/
 .claude/
 graphify-out/
 

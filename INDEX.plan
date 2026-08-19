@@ -19,7 +19,7 @@ because they exist.
 
 ## Current main spine
 
-M01 accepted -> M02 accepted -> M03 fixing -> M04 enTT -> M05 RocksDB ->
+M01 accepted -> M02 accepted -> M03 review pending -> M04 enTT -> M05 RocksDB ->
 M06 embedded client/server -> M07 construction -> M08 blueprints ->
 M10 hierarchical fast travel.
 
