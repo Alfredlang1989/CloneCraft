@@ -1,5 +1,5 @@
 -- Lowland macro relief only. Biome-specific offsets, detail and ridges are
--- applied in C++ from data/biomes.json after all terrain-mask fields are sampled.
+-- applied in C++ from MODS/Default/biomes.json after all mask fields are sampled.
 -- Keeping this field near Y=0 prevents ordinary plains from inheriting the
 -- old global +38 block pedestal.
 function sample(seed)

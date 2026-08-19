@@ -25,8 +25,7 @@ Historical milestone numbers in old ADR prose do not define current ordering.
 | M06 Embedded client/server | OPEN | M05 | `docs/milestones/M06.md` |
 | M07 Construction foundation | OPEN | M06 | `docs/milestones/M07.md` |
 | M08 Construction blueprints/jobs | OPEN | M07 | `docs/milestones/M08.md` |
-| M09 Macro biomes, oceans and inland lakes | OPEN | M08 | `docs/milestones/M09.md` |
-| M10 Hierarchical fast travel | OPEN | M09 (ordering only) | `docs/milestones/M10.md` |
+| M10 Hierarchical fast travel | OPEN | M08 (ordering only) | `docs/milestones/M10.md` |
 
 `docs/ACTIVE_FINDINGS.md` contains the currently known M03 review blockers.
 Once a milestone is externally accepted, this roadmap is the only status file
@@ -43,26 +42,17 @@ M01 state/Sidecars
                -> M06 transport/server authority
                   -> M07 bulk construction
                      -> M08 blueprints/jobs
-                        -> M09 macro biomes + hydrology
-                           -> M10 hierarchical fast travel
+                        -> M10 hierarchical fast travel
 ```
 
 The order is architectural: later milestones must consume the earlier public
 contracts instead of replacing them.
 
-## Promoted recovery references
+## Preserved recovery reference
 
-The two preserved recovery topics are now explicit end-of-spine milestones.
-Their historical commits remain reference material, not alternate contracts:
-
-- M09 ports useful R01 worldgen behavior onto the current data-driven content
-  model.
-- M10 ports useful R02 hierarchy-aware navigation behavior onto the current
-  coordinate/DynamicSpace contracts.
-
-Exact source links and fallback `git show` commands live in
-`docs/RECOVERY_WORLDGEN_FASTTRAVEL.md`. Do not read that reference packet while
-working on M04-M08; M09/M10 list the exact subset each run needs.
+M10 ports useful hierarchy-aware navigation behavior onto the current
+coordinate/DynamicSpace contracts. Its contract links the exact reference
+code; earlier milestones do not need that material.
 
 ## Parallel lanes
 
@@ -82,9 +72,9 @@ requires work:
 Binding cross-lane invariants are already in `docs/ARCHITECTURE.md`. Detailed
 lane/domain docs are read only when a selected milestone touches them.
 
-## Planning depth for M04-M10
+## Planning depth for remaining milestones
 
-M04-M10 are no longer placeholders. Their contracts define state ownership,
+M04-M08 and M10 are no longer placeholders. Their contracts define state ownership,
 threading, forbidden shortcuts, integration boundaries and mandatory proofs.
 The planner may refine implementation ordering from current code, but may not
 weaken those contracts or invent an alternate architecture.

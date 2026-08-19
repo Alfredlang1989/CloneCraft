@@ -14,7 +14,7 @@ namespace world
     /**
      * In-memory persistence sink (M05): records dirty chunks and
      * last-write-wins block/property deltas without any database. This is the
-     * reference implementation of PersistenceSink; M09 replaces it with the
+     * reference implementation of PersistenceSink; M05 replaces it with the
      * RocksDB backend while the WorldState contract stays unchanged.
      *
      * M01-B (#20): property deltas are keyed by the scope-aware canonical
@@ -30,7 +30,7 @@ namespace world
                                 std::optional<PropertyValue> value ) override;
         void flush() override;
 
-        // -- introspection (tests / M09 migration probe) ----------------------
+        // -- introspection (tests / M05 migration probe) ----------------------
         std::size_t blockDeltaCount() const { return mBlockDeltas.size(); }
         std::size_t propertyDeltaCount() const { return mPropertyDeltas.size(); }
         std::size_t dirtyChunkCount() const { return mDirtyChunks.size(); }

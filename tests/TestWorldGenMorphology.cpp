@@ -40,11 +40,29 @@ TEST_CASE( default_river_field_remains_a_long_thin_filament )
                static_cast<std::size_t>( z );
     };
 
+    // The origin may now be a real ocean. Locate one deterministic land
+    // filament first, then prove its local morphology at block resolution.
+    bool foundLandChannel = false;
+    std::int64_t centerX = 0, centerZ = 0;
+    for( std::int64_t x = -65536; x <= 65536 && !foundLandChannel; x += 64 )
+        for( std::int64_t z = -65536; z <= 65536; z += 64 )
+        {
+            if( river.sample2D( world::fromOriginOffset( x, 0, z ) ) < 0.024 )
+            {
+                centerX = x;
+                centerZ = z;
+                foundLandChannel = true;
+                break;
+            }
+        }
+    CHECK( foundLandChannel );
+
     std::size_t channelCount = 0u;
     for( int x = 0; x < N; ++x )
         for( int z = 0; z < N; ++z )
         {
-            const world::BlockAddress p = world::fromOriginOffset( x - N / 2, 0, z - N / 2 );
+            const world::BlockAddress p = world::fromOriginOffset(
+                centerX + x - N / 2, 0, centerZ + z - N / 2 );
             if( river.sample2D( p ) < 0.024 )
             {
                 mask[index( x, z )] = 1u;
@@ -205,8 +223,10 @@ TEST_CASE( river_tunnel_route_is_disabled_outside_real_massifs )
     std::size_t lowlandSamples = 0u;
     std::size_t massifSamples = 0u;
     std::size_t activeTunnelSamples = 0u;
-    for( int x = -2048; x <= 2048; x += 64 )
-        for( int z = -2048; z <= 2048; z += 64 )
+    // Macro geology needs a world-scale sample window; a local spawn window
+    // is intentionally too small to contain every massif class now.
+    for( int x = -65536; x <= 65536; x += 1024 )
+        for( int z = -65536; z <= 65536; z += 1024 )
         {
             const world::BlockAddress p = world::fromOriginOffset( x, 0, z );
             const double mountainValue = mountain.sample2D( p );
@@ -226,6 +246,57 @@ TEST_CASE( river_tunnel_route_is_disabled_outside_real_massifs )
     CHECK( lowlandSamples > 100u );
     CHECK( massifSamples > 0u );
     CHECK( activeTunnelSamples > 0u );
+}
+
+TEST_CASE( macro_hydrology_keeps_ocean_and_inland_water_in_sane_world_scale_bands )
+{
+    auto oceanCfg = fieldConfig( "ocean_mask", worldgen::FieldDimension::D2,
+                                 "hydrology.lua", 1000u );
+    oceanCfg.functionName = "ocean_mask";
+    auto lakeCfg = fieldConfig( "lake_mask", worldgen::FieldDimension::D2,
+                                "hydrology.lua", 1000u );
+    lakeCfg.functionName = "lake_mask";
+    auto levelCfg = fieldConfig( "lake_level", worldgen::FieldDimension::D2,
+                                 "hydrology.lua", 1000u );
+    levelCfg.functionName = "lake_level";
+    auto bottomCfg = fieldConfig( "lake_bottom", worldgen::FieldDimension::D2,
+                                  "hydrology.lua", 1000u );
+    bottomCfg.functionName = "lake_bottom";
+
+    worldgen::LuaFieldEvaluator ocean( oceanCfg, 1337u );
+    worldgen::LuaFieldEvaluator lake( lakeCfg, 1337u );
+    worldgen::LuaFieldEvaluator level( levelCfg, 1337u );
+    worldgen::LuaFieldEvaluator bottom( bottomCfg, 1337u );
+
+    std::size_t samples = 0u, oceanSamples = 0u, lakeSamples = 0u;
+    for( int gx = -64; gx < 64; ++gx )
+        for( int gz = -64; gz < 64; ++gz )
+        {
+            const world::BlockAddress p = world::fromOriginOffset(
+                static_cast<std::int64_t>( gx ) * 2048, 0,
+                static_cast<std::int64_t>( gz ) * 2048 );
+            const double oceanValue = ocean.sample2D( p );
+            const double lakeValue = lake.sample2D( p );
+            if( oceanValue > 0.45 ) ++oceanSamples;
+            else if( lakeValue > 0.48 )
+            {
+                ++lakeSamples;
+                CHECK( level.sample2D( p ) - bottom.sample2D( p ) > 3.0 );
+            }
+            ++samples;
+        }
+
+    const double oceanFraction = static_cast<double>( oceanSamples ) / samples;
+    const double lakeFraction = static_cast<double>( lakeSamples ) / samples;
+    const double dryLandFraction = 1.0 - oceanFraction - lakeFraction;
+
+    // Guard rails rather than an atlas: seeds may vary, but the default seed
+    // must be neither a waterworld nor an almost-waterless supercontinent.
+    CHECK( oceanFraction > 0.35 );
+    CHECK( oceanFraction < 0.75 );
+    CHECK( lakeFraction > 0.003 );
+    CHECK( lakeFraction < 0.06 );
+    CHECK( dryLandFraction > 0.20 );
 }
 
 int main() { return test::runAll(); }

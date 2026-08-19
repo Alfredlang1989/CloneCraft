@@ -12,20 +12,29 @@ local function smoothstep(a,b,x)
     return t*t*(3-2*t)
 end
 
+local function land_factor()
+    local signal=noise2(0.0000065,801)*0.78
+               + noise2(0.0000210,802)*0.17
+               + noise2(0.0000750,803)*0.05
+    return smoothstep(-0.035,0.105,signal)
+end
+
 -- This deliberately follows the same macro-mountain signal used by the
 -- high-mountain biome masks. Do not reconstruct surface_height here: the real
--- surface is biome-adjusted in C++, and duplicating the old height formula was
--- what made river carving dig far below Y=0 after the v18.3.5 terrain change.
+-- surface is biome-adjusted in C++; duplicating its formula here would desync
+-- river carving from the data-driven terrain profile.
 local function mountain_strength()
-    local continental=0.5+0.5*noise2(0.00034, 111)
-    local rugged=0.5+0.5*noise2(0.00047, 112)
+    if land_factor()<0.52 then return 0.0 end
+    local continental=0.5+0.5*(noise2(0.000040,111)*0.72+noise2(0.000145,113)*0.28)
+    local rugged=0.5+0.5*(noise2(0.000055,112)*0.68+noise2(0.000190,114)*0.32)
     local macro=continental*0.58+rugged*0.42
-    local crown=0.5+0.5*noise2(0.00073, 116)
+    local crown=0.5+0.5*noise2(0.000080,116)
     local massif=smoothstep(0.62,0.79,macro)
     return clamp(massif*(0.55+crown*0.45),0,1)
 end
 
 local function river_distance()
+    if land_factor()<0.52 then return 1.0 end
     local wx=noise2(0.0007, 701)*120.0
     local wz=noise2(0.0007, 702)*120.0
     return math.abs(noise2(0.0016, 703,wx,wz))

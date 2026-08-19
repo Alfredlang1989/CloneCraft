@@ -106,7 +106,7 @@ namespace world
                           const PropertyValue &value, const PropertyValue &defaultValue )
         {
             if( localIndex >= VOLUME )
-                return false; // out-of-range local index (M09 deserialization trap)
+                return false; // out-of-range local index (deserialization trap)
             if( mBlocks[localIndex] == 0u )
                 return false; // AIR: a sidecar entry would be zombie state
             auto it = mSidecars.find( typeId );
@@ -152,7 +152,7 @@ namespace world
         /** Drops all sidecars (wholesale content replacement). */
         void clearProperties() { mSidecars.clear(); }
 
-        /** Deterministic (type-id order) access for serialization (M09). */
+        /** Deterministic (type-id order) access for serialization. */
         const std::map<std::string, std::unique_ptr<Sidecar<PropertyValue>>> &sidecars() const
         {
             return mSidecars;
@@ -163,7 +163,7 @@ namespace world
         std::array<std::uint16_t, VOLUME> mBlocks{};
         std::uint32_t mNonAirCount = 0;
         // Lazy registry-driven sidecar storage: an empty chunk holds nothing.
-        // std::map keeps type-id order deterministic for serialization (M09).
+        // std::map keeps type-id order deterministic for serialization.
         std::map<std::string, std::unique_ptr<Sidecar<PropertyValue>>> mSidecars;
     };
 } // namespace world

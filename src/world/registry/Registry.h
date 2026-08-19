@@ -271,7 +271,7 @@ namespace world
      * Registered sidecar type (issue #3, section 5.1). Mods declare new
      * sidecar types in sidecars.json; the optimized C++ storage per sidecar
      * may differ from this metadata. The serialization version prepares the
-     * persistence layer (M09) without implementing it yet.
+     * M05 persistence layer without implementing it yet.
      *
      * The runtime pilot (M04) is hardwired to the orientation sidecar; the
      * registry-driven resolver that stores values for *any* declared type
@@ -294,7 +294,7 @@ namespace world
         // the Float value type. Validated per valueType when parsing.
         std::variant<std::uint32_t, float> defaultValue = 0u;
         std::uint32_t bitWidth = 0;        // compact-encoding hint (0 = full type width);
-                                           // metadata for storage/serialization (M09) only
+                                           // metadata for storage/serialization only
         SidecarStorageStrategy storage = SidecarStorageStrategy::Sparse;
         bool persist = true;               // persistence policy
         std::uint32_t serializationVersion = 1;

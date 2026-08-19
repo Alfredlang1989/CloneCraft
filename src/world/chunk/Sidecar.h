@@ -17,7 +17,7 @@ namespace world
      *    Sidecar that becomes empty may be destroyed entirely by its owner.
      *
      * Entries are kept in ascending local-index order (std::map) so later
-     * serialization (M09) iterates deterministically.
+     * serialization iterates deterministically.
      *
      * Removal is decided against the value supplied per call
      * (setWithDefault), not against a chunk-wide baked default, so objects
@@ -33,7 +33,7 @@ namespace world
          * @param defaultValue value that removes the entry again
          * @param capacity    number of valid local indices; 0 = unbounded.
          *                    Chunk passes its VOLUME so out-of-range indices
-         *                    (a future deserialization trap, M09) are
+         *                    (a future deserialization trap) are
          *                    rejected instead of silently stored.
          */
         explicit Sidecar( T defaultValue, std::uint32_t capacity = 0u ) :

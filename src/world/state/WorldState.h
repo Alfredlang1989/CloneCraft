@@ -115,7 +115,7 @@ namespace world
             mOnTargetChange = std::move( callback );
         }
 
-        // -- persistence-dirty abstraction (M05, backend comes in M09) --------
+        // -- persistence-dirty abstraction (M05 contract) ---------------------
         void setPersistenceSink( PersistenceSink *sink ) { mPersistenceSink = sink; }
 
         const SidecarRegistry &sidecars() const { return mSidecars; }

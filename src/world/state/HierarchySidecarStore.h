@@ -64,7 +64,7 @@ namespace world
         std::size_t entryCount( SidecarScope scope ) const;
 
         /** Deterministic enumeration (ascending scope, address, property id);
-         *  the seed of future serialization (M09). */
+         *  the seed of future serialization. */
         struct EnumeratedEntry
         {
             WorldStateTarget target;

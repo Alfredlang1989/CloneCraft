@@ -8,7 +8,7 @@ local function smoothstep(a, b, x)
     return t*t*(3.0-2.0*t)
 end
 function sample(seed)
-    local band = 0.5 + 0.5 * noise2(0.00090, 621)
-    local detail = 0.5 + 0.5 * noise2(0.00155, 622)
+    local band = 0.5 + 0.5 * noise2(0.000095, 621)
+    local detail = 0.5 + 0.5 * noise2(0.000220, 622)
     return 0.30 + smoothstep(0.42, 0.70, band) * (0.50 + detail * 0.20)
 end

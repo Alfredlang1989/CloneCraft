@@ -10,18 +10,18 @@
 
 namespace world
 {
-    /** Block mutation recorded for persistence (M05 abstraction, M09 sink). */
+    /** Block mutation recorded for persistence (M05 abstraction and sink). */
     struct BlockDelta
     {
         BlockAddress address;
         // The observed previous value and the final value. For Base+Delta
-        // persistence (M09) the authoritative record is `newRuntimeId`; the
+        // Base+Delta persistence the authoritative record is `newRuntimeId`; the
         // old id is informational (hooks/undo), not a delta pair.
         std::uint16_t oldRuntimeId = 0;
         std::uint16_t newRuntimeId = 0;
     };
 
-    /** Property mutation recorded for persistence (M05 abstraction, M09 sink).
+    /** Property mutation recorded for persistence (M05 abstraction and sink).
      *
      * M01-B (#20): the logical delta identity is scope-aware and carries no
      * redundancy. `target` is the full canonical WorldStateTarget
@@ -55,7 +55,7 @@ namespace world
     /**
      * Persistence-dirty abstraction (issue #3, section 5.3 / M05): gameplay
      * mutations flow through the unified world state into a PersistenceSink.
-     * M09 implements the RocksDB-backed sink; game code never knows the
+     * M05 implements the RocksDB-backed sink; game code never knows the
      * backend. Sinks must accept writes on any thread of the caller and
      * report flush() as the durable point.
      */
