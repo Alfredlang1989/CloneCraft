@@ -10,6 +10,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <string>
 #include <variant>
 
@@ -341,42 +342,264 @@ TEST_CASE( sidecar_default_mod_data_is_valid )
 TEST_CASE( sidecar_parsing_validation )
 {
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "orientation", "displayName": "O" } ]})" ); } ) );
+        { "id": "orientation", "displayName": "O", "scope": "block" } ]})" ); } ) );
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "O", "valueType": "bogus" } ]})" ); } ) );
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "valueType": "bogus" } ]})" ); } ) );
+    // bitWidth 0 is the valid "full type width" semantic, shared by loader
+    // and runtime (validateSidecarDef).
+    const world::SidecarRegistry fullWidth = parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "bitWidth": 0 } ]})" );
+    CHECK_EQ( fullWidth.size(), std::size_t{ 1 } );
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "O", "bitWidth": 0 } ]})" ); } ) );
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "storage": "compact" } ]})" ); } ) );
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "O", "storage": "compact" } ]})" ); } ) );
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "serializationVersion": 0 } ]})" ); } ) );
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "O", "serializationVersion": 0 } ]})" ); } ) );
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "unexpected": true } ]})" ); } ) );
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "O", "unexpected": true } ]})" ); } ) );
-    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "O" },
-        { "id": "core:orientation", "displayName": "O2" } ]})" ); } ) );
+        { "id": "core:orientation", "displayName": "O", "scope": "block" },
+        { "id": "core:orientation", "displayName": "O2", "scope": "block" } ]})" ); } ) );
 
     // Type-aware defaultValue/bitWidth validation (review M04):
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "O", "valueType": "uint8",
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "valueType": "uint8",
           "defaultValue": 255, "bitWidth": 3 } ]})" ); } ) ); // 255 does not fit 3 bits
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:bad", "displayName": "B", "valueType": "uint8",
+        { "id": "core:bad", "displayName": "B", "scope": "block", "valueType": "uint8",
           "defaultValue": 256 } ]})" ); } ) ); // does not fit uint8
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:bad", "displayName": "B", "valueType": "uint8",
+        { "id": "core:bad", "displayName": "B", "scope": "block", "valueType": "uint8",
           "defaultValue": -1 } ]})" ); } ) ); // negative: not unsigned
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:bad", "displayName": "B", "valueType": "float", "bitWidth": 3 } ]})" ); } ) );
+        { "id": "core:bad", "displayName": "B", "scope": "block", "valueType": "float", "bitWidth": 3 } ]})" ); } ) );
     CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
-        { "id": "core:bad", "displayName": "B", "valueType": "float",
+        { "id": "core:bad", "displayName": "B", "scope": "block", "valueType": "float",
           "defaultValue": "20.5" } ]})" ); } ) ); // string is not a number
+}
+
+TEST_CASE( sidecar_json_uint32_fields_are_range_checked_before_narrowing )
+{
+    // M01-A: every JSON -> uint32 read in parseSidecars validates the full
+    // 64-bit integer BEFORE narrowing. Values beyond uint32 must never wrap
+    // into a small valid-looking number:
+    //   bitWidth 4294967297            (would truncate to 1)
+    //   integer defaultValue 4294967296 (would truncate to 0)
+    //   serializationVersion 4294967297 (would truncate to 1)
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "bitWidth": 4294967296 } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "bitWidth": 4294967297 } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:bad", "displayName": "B", "scope": "block", "valueType": "uint8",
+          "defaultValue": 4294967296 } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:bad", "displayName": "B", "scope": "block", "valueType": "uint8",
+          "defaultValue": 4294967297 } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block",
+          "serializationVersion": 4294967296 } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block",
+          "serializationVersion": 4294967297 } ]})" ); } ) );
+
+    // Reviewer round 2: UINT64_MAX is unsigned-integer storage and
+    // is_number_integer() covers it too, so the unsigned branch must reject
+    // the raw uint64 value - never read it via get<int64_t>() and wrap it.
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block",
+          "bitWidth": 18446744073709551615 } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:bad", "displayName": "B", "scope": "block", "valueType": "uint8",
+          "defaultValue": 18446744073709551615 } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block",
+          "serializationVersion": 18446744073709551615 } ]})" ); } ) );
+
+    // The legal uint32 boundary itself remains valid where the semantic
+    // domain allows it: a uint32 sidecar may default to 4294967295.
+    const world::SidecarRegistry boundary = parseSidecars( R"({"sidecars":[
+        { "id": "mod:stored", "displayName": "Stored", "scope": "block", "valueType": "uint32",
+          "defaultValue": 4294967295 } ]})" );
+    const world::SidecarDef *stored = boundary.find( "mod:stored" );
+    CHECK( stored != nullptr );
+    if( stored )
+        CHECK_EQ( std::get<std::uint32_t>( stored->defaultValue ), 0xFFFFFFFFu );
+
+    // The existing bitWidth semantic bound is unchanged: 32 is still legal,
+    // 0 is the valid "full type width" (accepted above), 33 is rejected.
+    const world::SidecarRegistry fullWidth = parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "bitWidth": 32 } ]})" );
+    const world::SidecarDef *width = fullWidth.find( "core:orientation" );
+    CHECK( width != nullptr );
+    if( width )
+        CHECK_EQ( width->bitWidth, 32u );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "core:orientation", "displayName": "O", "scope": "block", "bitWidth": 33 } ]})" ); } ) );
+}
+
+TEST_CASE( sidecar_scope_parsing_is_strict )
+{
+    // M01-B (#20): explicit scope parsing. Every tier parses to its own
+    // SidecarScope; an unknown scope string is a hard RegistryError; a
+    // missing scope is rejected too - data files must declare their scope.
+    const char *const scopeJson[6] = { "block", "chunk", "chunk_group",
+                                       "section", "region", "sector" };
+    const world::SidecarScope expected[6] = {
+        world::SidecarScope::Block,  world::SidecarScope::Chunk,
+        world::SidecarScope::ChunkGroup, world::SidecarScope::Section,
+        world::SidecarScope::Region, world::SidecarScope::Sector };
+    for( int i = 0; i < 6; ++i )
+    {
+        const std::string text = std::string( R"({"sidecars":[
+            { "id": "mod:scoped", "displayName": "S", "scope": ")" ) +
+                                 scopeJson[i] + R"(" } ]})";
+        const world::SidecarRegistry sidecars = parseSidecars( text );
+        const world::SidecarDef *scoped = sidecars.find( "mod:scoped" );
+        CHECK( scoped != nullptr );
+        if( scoped )
+            CHECK( scoped->scope == expected[i] );
+    }
+
+CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "mod:scoped", "displayName": "S", "scope": "bogus" } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "mod:scoped", "displayName": "S", "scope": 3 } ]})" ); } ) );
+
+    // M01-B review: 'scope' is a mandatory data-driven field. A mod file may
+    // never guess its scope implicitly - a missing key is a RegistryError.
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "mod:scoped", "displayName": "S" } ]})" ); } ) );
+
+    // M01-B review: hierarchy sidecars are sparse by contract. A dense
+    // declaration above the block tier must fail loudly instead of
+    // pretending dense storage exists.
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "mod:chunkdense", "displayName": "C", "scope": "chunk",
+          "storage": "dense" } ]})" ); } ) );
+    CHECK( rejected( [&] { (void)parseSidecars( R"({"sidecars":[
+        { "id": "mod:regiondense", "displayName": "R", "scope": "region",
+          "storage": "dense" } ]})" ); } ) );
+    // Block-scope dense remains existing older architecture (not refactored).
+    const world::SidecarRegistry blockDense = parseSidecars( R"({"sidecars":[
+        { "id": "mod:oriented", "displayName": "O", "scope": "block",
+          "valueType": "uint8", "defaultValue": 0, "storage": "dense" } ]})" );
+    CHECK_EQ( blockDense.size(), std::size_t{ 1 } );
+}
+
+TEST_CASE( programmatic_sidecar_defs_share_the_loader_validation )
+{
+    // M01-B review round 4: runtime insertions use the SAME structural
+    // validation as the JSON loader (world::validateSidecarDef via the
+    // Registry<SidecarDef>::insert gate). A definition the loader rejects
+    // can never be inserted programmatically either.
+    world::SidecarRegistry sidecars;
+
+    const auto make = []( world::SidecarScope scope,
+                          world::SidecarStorageStrategy storage ) {
+        world::SidecarDef def;
+        def.id = "mod:probe";
+        def.displayName = "Probe";
+        def.valueType = world::SidecarValueType::Uint32;
+        def.scope = scope;
+        def.storage = storage;
+        def.defaultValue = 0u;
+        return def;
+    };
+
+    // The reviewer's exact case: programmatic dense Region Sidecar.
+    CHECK( rejected( [&] {
+        sidecars.insert( make( world::SidecarScope::Region,
+                               world::SidecarStorageStrategy::Dense ) );
+    } ) );
+    CHECK( rejected( [&] {
+        sidecars.insert( make( world::SidecarScope::Chunk,
+                               world::SidecarStorageStrategy::Dense ) );
+    } ) );
+    // Block-scope dense remains existing older architecture: still legal.
+    sidecars.insert( make( world::SidecarScope::Block,
+                           world::SidecarStorageStrategy::Dense ) );
+    CHECK_EQ( sidecars.size(), std::size_t{ 1 } );
+
+    // Remaining structural invariants apply to programmatic definitions too.
+    world::SidecarDef badId = make( world::SidecarScope::Block,
+                                    world::SidecarStorageStrategy::Sparse );
+    badId.id = "nocolon";
+    CHECK( rejected( [&] { sidecars.insert( badId ); } ) );
+    world::SidecarDef badWidth = make( world::SidecarScope::Block,
+                                       world::SidecarStorageStrategy::Sparse );
+    badWidth.bitWidth = 33u;
+    CHECK( rejected( [&] { sidecars.insert( badWidth ); } ) );
+    world::SidecarDef floatWidth = make( world::SidecarScope::Block,
+                                         world::SidecarStorageStrategy::Sparse );
+    floatWidth.valueType = world::SidecarValueType::Float;
+    floatWidth.defaultValue = 0.5f;
+    floatWidth.bitWidth = 8u;
+    CHECK( rejected( [&] { sidecars.insert( floatWidth ); } ) );
+    world::SidecarDef zeroVersion = make( world::SidecarScope::Block,
+                                          world::SidecarStorageStrategy::Sparse );
+    zeroVersion.serializationVersion = 0u;
+    CHECK( rejected( [&] { sidecars.insert( zeroVersion ); } ) );
+    world::SidecarDef misfit = make( world::SidecarScope::Block,
+                                     world::SidecarStorageStrategy::Sparse );
+    misfit.valueType = world::SidecarValueType::Uint8;
+    misfit.defaultValue = 300u; // does not fit uint8
+    CHECK( rejected( [&] { sidecars.insert( misfit ); } ) );
+
+    // Round 5: out-of-range programmatic enum values are invalid too - a
+    // static_cast can never smuggle a foreign enum member into the registry.
+    world::SidecarDef badScope = make( world::SidecarScope::Block,
+                                       world::SidecarStorageStrategy::Sparse );
+    badScope.scope = static_cast<world::SidecarScope>( 99 );
+    CHECK( rejected( [&] { sidecars.insert( badScope ); } ) );
+    world::SidecarDef badType = make( world::SidecarScope::Block,
+                                      world::SidecarStorageStrategy::Sparse );
+    badType.valueType = static_cast<world::SidecarValueType>( 99 );
+    CHECK( rejected( [&] { sidecars.insert( badType ); } ) );
+    world::SidecarDef badStorage = make( world::SidecarScope::Block,
+                                         world::SidecarStorageStrategy::Sparse );
+    badStorage.storage = static_cast<world::SidecarStorageStrategy>( 99 );
+    CHECK( rejected( [&] { sidecars.insert( badStorage ); } ) );
+
+    // Round 6: Float + bitWidth 0 is the exact semantic equivalent of the
+    // omitted bitWidth, in BOTH directions - programmatic and JSON.
+    world::SidecarDef floatFullWidth = make( world::SidecarScope::Block,
+                                             world::SidecarStorageStrategy::Sparse );
+    floatFullWidth.id = "mod:floatfw";
+    floatFullWidth.valueType = world::SidecarValueType::Float;
+    floatFullWidth.defaultValue = 0.5f;
+    floatFullWidth.bitWidth = 0u;
+    sidecars.insert( floatFullWidth ); // accepted, like the loader below
+    // (positive check below; `rejected` must not fire)
+    const world::SidecarRegistry floatJson = parseSidecars( R"({"sidecars":[
+        { "id": "mod:f", "displayName": "F", "scope": "block", "valueType": "float",
+          "defaultValue": 0.5, "bitWidth": 0 } ]})" );
+    CHECK_EQ( floatJson.size(), std::size_t{ 1 } );
+    // Non-zero explicit width on float stays rejected in both directions.
+    world::SidecarDef floatCompact = make( world::SidecarScope::Block,
+                                           world::SidecarStorageStrategy::Sparse );
+    floatCompact.valueType = world::SidecarValueType::Float;
+    floatCompact.defaultValue = 0.5f;
+    floatCompact.bitWidth = 8u;
+    CHECK( rejected( [&] { sidecars.insert( floatCompact ); } ) );
+
+    // Round 6: sidecar floats are FINITE by contract. NaN/Infinity can never
+    // be stored or registered - the equality-based sparse semantics and the
+    // default-removal threshold depend on stable values.
+    world::SidecarDef nanDefault = floatFullWidth;
+    nanDefault.defaultValue = std::numeric_limits<float>::quiet_NaN();
+    CHECK( rejected( [&] { sidecars.insert( nanDefault ); } ) );
+    world::SidecarDef infDefault = floatFullWidth;
+    infDefault.defaultValue = std::numeric_limits<float>::infinity();
+    CHECK( rejected( [&] { sidecars.insert( infDefault ); } ) );
+    world::SidecarDef negInfDefault = floatFullWidth;
+    negInfDefault.defaultValue = -std::numeric_limits<float>::infinity();
+    CHECK( rejected( [&] { sidecars.insert( negInfDefault ); } ) );
 }
 
 TEST_CASE( sidecar_float_default_value_is_accepted )
 {
     const world::SidecarRegistry sidecars = parseSidecars( R"({"sidecars":[
-        { "id": "mod:heat", "displayName": "Heat", "valueType": "float", "defaultValue": 20.5 } ]})" );
+        { "id": "mod:heat", "displayName": "Heat", "scope": "block", "valueType": "float", "defaultValue": 20.5 } ]})" );
     CHECK_EQ( sidecars.size(), std::size_t{ 1 } );
     const world::SidecarDef *heat = sidecars.find( "mod:heat" );
     CHECK( heat != nullptr );
@@ -388,7 +611,7 @@ TEST_CASE( sidecar_float_default_value_is_accepted )
     }
 
     const world::SidecarRegistry integral = parseSidecars( R"({"sidecars":[
-        { "id": "mod:stored", "displayName": "Stored", "valueType": "uint32",
+        { "id": "mod:stored", "displayName": "Stored", "scope": "block", "valueType": "uint32",
           "defaultValue": 3000000000 } ]})" );
     const world::SidecarDef *stored = integral.find( "mod:stored" );
     CHECK( stored != nullptr );

@@ -112,6 +112,43 @@ namespace world
         LocalBlockCoord block{};
         friend constexpr auto operator<=>( const BlockAddress &, const BlockAddress & ) = default;
     };
+
+    // M01-B (#20): thin canonical address views for the logical hierarchy
+    // tiers above a ChunkGroup. They reuse the exact existing coordinate
+    // digits; no new coordinate rules exist here. Each view carries ALL of
+    // its parent digits, so identity is canonical: the same local region
+    // digits in different sectors (or the same local section digits in
+    // different regions/sectors) are different addresses. There is no
+    // flattened global integer and no float/double identity.
+    // Sector remains the unbounded outermost digit of the hierarchy.
+    struct SectorAddress
+    {
+        SectorCoord sector{};
+        friend constexpr auto operator<=>( const SectorAddress &, const SectorAddress & ) = default;
+    };
+    struct RegionAddress
+    {
+        SectorCoord sector{};
+        LocalRegionCoord region{};
+        friend constexpr auto operator<=>( const RegionAddress &, const RegionAddress & ) = default;
+    };
+    struct SectionAddress
+    {
+        SectorCoord sector{};
+        LocalRegionCoord region{};
+        LocalSectionCoord section{};
+        friend constexpr auto operator<=>( const SectionAddress &, const SectionAddress & ) = default;
+    };
+
+    // Canonical projection views onto the logical super-tiers (M01-B): every
+    // lower address type keeps its full parent digits, so the projected
+    // identity is exactly the canonical identity of the tier.
+    inline constexpr SectorAddress sectorView( const RegionAddress &a ) { return { a.sector }; }
+    inline constexpr RegionAddress regionView( const SectionAddress &a ) { return { a.sector, a.region }; }
+    inline constexpr SectionAddress sectionView( const GroupAddress &a )
+    {
+        return { a.sector, a.region, a.section };
+    }
     struct RelativeI64
     {
         std::int64_t x = 0, y = 0, z = 0;

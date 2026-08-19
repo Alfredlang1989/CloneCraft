@@ -396,6 +396,38 @@
             "alphaMode": "mask",
             "alphaCutoff": 0.5,
             "receiveShadows": false
+        },
+        {
+            "id": "test:block_a",
+            "displayName": "Bus Proof Block A",
+            "tags": [
+                "test:bus_proof"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#FFFFFF",
+            "visualTintProperty": "test:visual_tint",
+            "roughness": 0.9,
+            "metalness": 0.0,
+            "reflection": 0.02
+        },
+        {
+            "id": "test:block_b",
+            "displayName": "Bus Proof Block B",
+            "tags": [
+                "test:bus_proof"
+            ],
+            "solid": true,
+            "transparent": false,
+            "opaque": true,
+            "emission": 0,
+            "color": "#FFFFFF",
+            "visualTintProperty": "test:visual_tint",
+            "roughness": 0.9,
+            "metalness": 0.0,
+            "reflection": 0.02
         }
     ]
 }

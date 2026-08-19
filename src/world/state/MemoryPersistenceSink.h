@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace world
@@ -15,13 +16,17 @@ namespace world
      * last-write-wins block/property deltas without any database. This is the
      * reference implementation of PersistenceSink; M09 replaces it with the
      * RocksDB backend while the WorldState contract stays unchanged.
+     *
+     * M01-B (#20): property deltas are keyed by the scope-aware canonical
+     * target identity, so hierarchy-scope properties (Chunk .. Sector) are
+     * first-class records; only block-scope changes mark a chunk dirty.
      */
     class MemoryPersistenceSink : public PersistenceSink
     {
     public:
         void onBlockChanged( const BlockAddress &, std::uint16_t oldRuntimeId,
                              std::uint16_t newRuntimeId ) override;
-        void onPropertyChanged( const BlockAddress &, const std::string &propertyId,
+        void onPropertyChanged( const WorldStateTarget &, const std::string &propertyId,
                                 std::optional<PropertyValue> value ) override;
         void flush() override;
 
@@ -32,14 +37,15 @@ namespace world
         bool isDirty( const ChunkAddress & ) const;
         std::vector<ChunkAddress> dirtyChunks() const;
         const std::map<BlockAddress, BlockDelta> &blockDeltas() const { return mBlockDeltas; }
-        const std::map<std::pair<BlockAddress, std::string>, PropertyDelta> &propertyDeltas() const
+        const std::map<std::pair<WorldStateTarget, std::string>, PropertyDelta> &
+        propertyDeltas() const
         {
             return mPropertyDeltas;
         }
 
     private:
         std::map<BlockAddress, BlockDelta> mBlockDeltas;
-        std::map<std::pair<BlockAddress, std::string>, PropertyDelta> mPropertyDeltas;
+        std::map<std::pair<WorldStateTarget, std::string>, PropertyDelta> mPropertyDeltas;
         std::set<ChunkAddress> mDirtyChunks;
     };
 } // namespace world

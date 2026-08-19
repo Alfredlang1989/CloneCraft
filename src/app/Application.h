@@ -14,10 +14,18 @@
 #include "world/chunk/ChunkManager.h"
 #include "world/chunk/ChunkStreamingManager.h"
 #include "world/interaction/BlockPicker.h"
+#include "world/interaction/PlayerInteractionController.h"
+#include "world/communication/BlockCommandHandlers.h"
+#include "world/communication/CommunicationEnvelope.h"
+#include "world/communication/CommunicationRouter.h"
+#include "world/communication/DelayedMessageScheduler.h"
+#include "world/communication/SchedulerClock.h"
 #include "world/coordinates/StickyGroupAnchor.h"
 #include "world/registry/BlockIdTable.h"
 #include "world/registry/PrototypeIdTable.h"
 #include "world/registry/Registry.h"
+#include "world/scripting/GameplayContentRuntime.h"
+#include "world/scripting/GameplayLuaRuntime.h"
 #include "world/state/MemoryPersistenceSink.h"
 #include "world/state/WorldState.h"
 #include "world/worldgen/WorldGen.h"
@@ -54,6 +62,18 @@ namespace app
         void updateBlockTarget();
         void updateDebugOverlay( std::chrono::steady_clock::time_point now, bool force = false );
         std::string buildDebugOverlayText() const;
+        /** M02-D: real player input -> envelope -> router -> world state.
+         *  Called from the SDL event path for mouse buttons (primary =
+         *  place selected block, secondary = remove). Never touches
+         *  ChunkManager directly. */
+        void handleBlockInteraction( bool primary );
+        void logInteractionReply( const std::string &action,
+                                  const world::communication::CommunicationEnvelope &reply ) const;
+        /** Generic render projection for a block's data-declared packed tint
+         *  property. Content owns the property id and values; this method
+         *  reacts only to WorldState's normal change hook. */
+        void updateBlockVisualTint( const world::BlockAddress &address,
+                                    const std::string &what );
 
         config::Settings mSettings;
         std::filesystem::path mSettingsPath;
@@ -64,6 +84,23 @@ namespace app
         std::unique_ptr<render::BlockSelectionRenderer> mSelectionRenderer;
         ui::UiConfig mUiConfig;
         std::optional<world::interaction::BlockPickResult> mTargetBlock;
+        // M03 Round 1: one production communication bus (single message-id
+        // source + bounded A/B queues + signal/slot/action registries). The
+        // former separate MessageIdSource/Router members are replaced by it.
+        // Gameplay input uses the bus's SYNCHRONOUS dispatch() convenience
+        // (validation + router execution, outputs in the DispatchResult);
+        // the A/B queues serve the async producer path (Round 2 timer
+        // worker via submit()/pump*()).
+        world::communication::CommunicationRuntime mCommunicationBus{ 256, 256 };
+        std::unique_ptr<world::interaction::PlayerInteractionController> mPlayerInteraction;
+        // M03 Round 2/4: the delayed-message scheduler (Time Worker) and the
+        // gameplay Lua runtime. The scheduler stores only transportable
+        // CommunicationEnvelopes; the owner/game thread drains due envelopes
+        // into the bus each frame. The Lua runtime is owner-thread only and
+        // MUST be destroyed before the bus/scheduler/world it references.
+        world::communication::SteadySchedulerClock mSchedulerClock;
+        world::communication::DelayedMessageScheduler mScheduler{ mSchedulerClock, 256 };
+        std::uint16_t mSelectedRuntimeId = 0;
         world::BlockRegistry mBlocks;
         world::BiomeRegistry mBiomes;
         world::ResourceRegistry mResources;
@@ -72,6 +109,12 @@ namespace app
         world::BlockIdTable mIdTable;
         std::unique_ptr<world::PrototypeIdTable> mPrototypeIds;
         std::unique_ptr<world::WorldState> mWorldState;
+        // M03 content runtime. Declared AFTER WorldState so it and its Lua VM
+        // are destroyed first (reverse declaration order). All concrete
+        // scripts/actions/placements live in the selected content root's
+        // gameplay.json, never in Application C++.
+        std::shared_ptr<world::scripting::GameplayContentRuntime> mGameplayContent;
+        bool mGameplayBootstrapFailed = false;
         world::MemoryPersistenceSink mPersistenceSink;
         config::ContentRoot mContentRoot;
         worldgen::WorldGenConfig mGenConfig;

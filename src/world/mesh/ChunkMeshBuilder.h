@@ -38,5 +38,9 @@ namespace world
         std::vector<std::uint8_t> mOpaque;
         std::vector<std::uint8_t> mNeedsTangent;
         std::vector<std::uint8_t> mCrossShape;
+        // Blocks with per-instance visual state must retain one quad owner per
+        // voxel; otherwise greedy merging would smear one voxel's tint across
+        // all same-id faces in the merged rectangle.
+        std::vector<std::uint8_t> mPerVoxelVisual;
     };
 } // namespace world

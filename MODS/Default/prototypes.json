@@ -13,6 +13,42 @@
                     "defaultValue": 0
                 }
             ]
+        },
+        {
+            "id": "test:block_a",
+            "displayName": "Bus Proof Block A",
+            "blockId": "test:block_a",
+            "capabilities": [
+                "test:bus_proof"
+            ],
+            "properties": [
+                {
+                    "id": "test:visual_tint",
+                    "defaultValue": 0
+                },
+                {
+                    "id": "test:callback_count",
+                    "defaultValue": 0
+                }
+            ]
+        },
+        {
+            "id": "test:block_b",
+            "displayName": "Bus Proof Block B",
+            "blockId": "test:block_b",
+            "capabilities": [
+                "test:bus_proof"
+            ],
+            "properties": [
+                {
+                    "id": "test:visual_tint",
+                    "defaultValue": 0
+                },
+                {
+                    "id": "test:callback_count",
+                    "defaultValue": 0
+                }
+            ]
         }
     ]
 }

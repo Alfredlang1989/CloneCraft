@@ -124,14 +124,14 @@ namespace world
         return chunk->getProperty( blockIndex( b.block ), typeId );
     }
 
-    const Sidecar<PropertyValue> *ChunkManager::chunkPropertySidecar(
+    const Sidecar<PropertyValue> *ChunkManager::blockPropertySidecarInChunk(
         const ChunkAddress &a, const std::string &typeId ) const
     {
         const Chunk *chunk = chunkAt( a );
         return chunk ? chunk->propertySidecar( typeId ) : nullptr;
     }
 
-    bool ChunkManager::clearChunkProperty( const ChunkAddress &a, const std::string &typeId )
+    bool ChunkManager::clearBlockPropertySidecarInChunk( const ChunkAddress &a, const std::string &typeId )
     {
         Chunk *chunk = chunkAt( a );
         if( !chunk )
@@ -162,12 +162,12 @@ namespace world
     const Sidecar<PropertyValue> *ChunkManager::chunkOrientationSidecar(
         const ChunkAddress &a ) const
     {
-        return chunkPropertySidecar( a, CORE_ORIENTATION_SIDECAR );
+        return blockPropertySidecarInChunk( a, CORE_ORIENTATION_SIDECAR );
     }
 
     void ChunkManager::clearChunkOrientations( const ChunkAddress &a )
     {
-        (void)clearChunkProperty( a, CORE_ORIENTATION_SIDECAR );
+        (void)clearBlockPropertySidecarInChunk( a, CORE_ORIENTATION_SIDECAR );
     }
 
     std::size_t ChunkManager::chunkCount() const

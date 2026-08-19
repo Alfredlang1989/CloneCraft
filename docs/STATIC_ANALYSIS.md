@@ -1,109 +1,69 @@
-# Static analysis and architecture gate
+# Static analysis and architecture gates
 
-Omnigrid now has two complementary repository-local analysis gates.
+The repository has complementary gates. They answer different questions and no
+green gate substitutes for another.
 
-## 1. clang-tidy: established C++ AST / semantic analysis
+## Deterministic architecture checker
 
-`tools/run_static_analysis.py` runs `clang-tidy` against CMake's
-`compile_commands.json` for every project translation unit under `src/` and
-`tests/`. `third_party/` is deliberately excluded. The runner passes
-`--quiet`, so clang-tidy does not print tens of thousands of suppressed
-third-party/system-header diagnostic counters; real project diagnostics remain
-visible.
+`tools/architecture_check.py` enforces the module/source dependency firewall
+from `tools/architecture_rules.json`.
 
-The rule set lives in `.clang-tidy` and currently enables:
+It checks module classification, allowed include direction, forbidden framework
+leaks, module/include cycles, duplicate header basenames, source-pattern
+invariants and large-translation-unit warnings.
 
-- `clang-analyzer-*`
-- `bugprone-*` (except `bugprone-forward-declaration-namespace`, disabled
-  because OgreNext intentionally exposes v1/v2 forward declarations with the
-  same class names and triggers that check spuriously)
-- `performance-*`
-- `portability-*`
-- selected low-noise modernization/readability checks
+The checker supports parallel file inspection through `--jobs` (default bounded
+by available CPUs) while merging results deterministically.
 
-`clang-analyzer-*` diagnostics are warnings-as-errors. Other enabled checks are
-reported and can be tightened after the initial warning baseline is known on the
-target toolchain.
-
-`.clang-tidy` uses clang-tidy's native YAML configuration format. This is build/tooling
-metadata only; Omnigrid runtime/content configuration remains JSON and no YAML parser
-is added to the game.
-
-`clang-tidy` is not vendored and `compile.sh` never installs it. The local
-coding-agent policy forbids modifying the OS. If the executable is missing,
-analysis stops and reports the missing tool. A custom/versioned executable can
-be selected with:
+Fast standalone use:
 
 ```bash
-CLANG_TIDY=/path/to/clang-tidy ./compile.sh
+python3 tools/architecture_check.py --root .
+python3 tools/architecture_check.py --root . --jobs 8
 ```
 
-Normal `./compile.sh` runs the AST pass by default. `--analyze-only` performs
-configuration + architecture + static analysis without compiling. The
-`--no-static-analysis` switch exists only as an explicit emergency escape hatch;
-the architecture gate still runs.
+## Graphify
 
-## 2. Omnigrid architecture checker
+Graphify is architecture analysis, not a Builder completion tool.
 
-`tools/architecture_check.py` is a small deterministic include/dependency gate.
-Its rules are JSON in `tools/architecture_rules.json`.
+In the OpenCode harness the Planner owns the refresh. After every Builder pass
+and before its Reviewer pass the Planner runs exactly one:
 
-It checks:
+```bash
+graphify update .
+```
 
-- every source file belongs to a declared module;
-- project-local include dependencies follow the allowed direction;
-- forbidden external framework leaks are blocked (for example Ogre/SDL headers
-  entering world/core modules, or SDL entering the renderer);
-- the module dependency graph contains no cycles;
-- the project-local include graph contains no include cycles;
-- no two project headers have the same basename;
-- source-pattern invariants from JSON, including the huge-world precision guard (no global camera XYZ fields/accessors, no absolute camera-pose API, no direct chunk/group-to-float cast);
-- very large C++ translation units are reported as refactor warnings.
+and then targeted `graphify query/path/explain` checks. Builder and Reviewer do
+not refresh the graph. Historical Graphify snapshots are not mandatory reading.
 
-This intentionally catches architecture mistakes that clang-tidy does not know
-about, for example world code starting to include Ogre headers or two unrelated
-modules both defining `Chunk.h`.
+## clang-tidy AST/static analysis
 
-Current dependency direction is approximately:
+`tools/run_static_analysis.py` runs clang-tidy against project translation units
+from `compile_commands.json`. It is parallel by default with a bounded
+`ThreadPoolExecutor`; `--jobs N` overrides concurrency.
+
+The rule set lives in `.clang-tidy`. The tool never installs clang-tidy or OS
+packages.
+
+## Full acceptance helper
+
+`./compile.sh` performs the full ordered gate:
 
 ```text
-core / coordinates / registry
-          |
-          +--> worldgen
-          |       |
-          +--> chunk
-          |       |
-          +--> mesh
-                  |
-platform --------> render
-camera/input ----> app <---- debug formatter
-                    |
-                   main
+architecture_check.py
+CMake configure / compile_commands.json
+clang-tidy static analysis
+build
+ctest
 ```
 
-The exact authoritative rule graph is `tools/architecture_rules.json`.
+Harness ownership is strict:
 
-## CMake helpers
+- Planner: architecture planning + Graphify refresh; never `compile.sh`.
+- Builder: targeted builds/tests; never `compile.sh`, never Graphify refresh.
+- Reviewer: only agent that runs final `./compile.sh` after cheap review stages
+  find no blocker.
 
-When Python is available CMake exposes:
-
-```bash
-cmake --build <build-dir> --target architecture_check
-```
-
-When clang-tidy is also available:
-
-```bash
-cmake --build <build-dir> --target static_analysis
-```
-
-`compile.sh` remains the preferred entry point because it runs the gates in the
-required order before the normal build and tests.
-
-## Agent rule
-
-Every future coding-agent run must read `INDEX.plan`, inspect `git status`, and
-use the normal analysis/build path before claiming a milestone complete.
-Do not silence an architecture/static-analysis failure by changing the checker
-unless the architectural rule itself is being deliberately changed and the
-reason is documented.
+Do not change a checker/rule merely to silence a valid patch failure. If an
+architecture rule itself must change, that requires an explicit architecture
+contract change rather than a local workaround.

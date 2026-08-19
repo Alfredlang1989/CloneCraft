@@ -1,0 +1,68 @@
+{
+    "scripts": [
+        {
+            "id": "block:a",
+            "file": "scripts/block_a.lua"
+        },
+        {
+            "id": "block:b",
+            "file": "scripts/block_b.lua"
+        }
+    ],
+    "handlers": [
+        {
+            "action": "test:timer.elapsed",
+            "kind": "event",
+            "receiver": "block:a",
+            "context": "test:bus",
+            "payloadSchema": "none",
+            "script": "block:a",
+            "function": "on_timer",
+            "principal": "block:a"
+        },
+        {
+            "action": "test:peer.change_color",
+            "kind": "event",
+            "receiver": "block:b",
+            "context": "test:bus",
+            "payloadSchema": "event_value",
+            "script": "block:b",
+            "function": "on_peer_change",
+            "principal": "block:b"
+        }
+    ],
+    "bootstraps": [
+        {
+            "placements": [
+                {
+                    "id": "proof_a",
+                    "block": "test:block_a",
+                    "x": 128,
+                    "z": 128,
+                    "surfaceOffset": 1,
+                    "replaceOccupied": true
+                },
+                {
+                    "id": "proof_b",
+                    "block": "test:block_b",
+                    "x": 130,
+                    "z": 128,
+                    "surfaceOffset": 1,
+                    "replaceOccupied": true
+                }
+            ],
+            "invoke": {
+                "script": "block:a",
+                "function": "start",
+                "principal": "block:a",
+                "sender": "system:content",
+                "receiver": "block:a",
+                "context": "test:bus",
+                "action": "test:start",
+                "kind": "command",
+                "target": "proof_a",
+                "payloadTarget": "proof_b"
+            }
+        }
+    ]
+}

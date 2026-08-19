@@ -4,8 +4,31 @@
             "id": "core:orientation",
             "displayName": "Orientation",
             "valueType": "uint8",
+            "scope": "block",
             "defaultValue": 0,
             "bitWidth": 3,
+            "storage": "sparse",
+            "persist": true,
+            "serializationVersion": 1
+        },
+        {
+            "id": "test:visual_tint",
+            "displayName": "Visual Tint",
+            "valueType": "uint32",
+            "scope": "block",
+            "defaultValue": 0,
+            "bitWidth": 32,
+            "storage": "sparse",
+            "persist": true,
+            "serializationVersion": 1
+        },
+        {
+            "id": "test:callback_count",
+            "displayName": "Callback Count",
+            "valueType": "uint8",
+            "scope": "block",
+            "defaultValue": 0,
+            "bitWidth": 8,
             "storage": "sparse",
             "persist": true,
             "serializationVersion": 1

@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 namespace world
@@ -41,16 +43,6 @@ namespace world
             }
         }
 
-        /** Content ids are stable contracts and must be <namespace>:<name>. */
-        bool isNamespacedId( const std::string &id )
-        {
-            const std::size_t separator = id.find( ':' );
-            if( separator == std::string::npos )
-                return false;
-            if( separator == 0u || separator + 1u >= id.size() )
-                return false;
-            return id.find( ':', separator + 1u ) == std::string::npos;
-        }
 
         int hexNibble( char c )
         {
@@ -68,6 +60,73 @@ namespace world
             if( hi < 0 || lo < 0 )
                 throw RegistryError( where + ": 'color' contains a non-hex digit" );
             return static_cast<std::uint8_t>( ( hi << 4 ) | lo );
+        }
+
+        /**
+         * Checked JSON -> uint32 read (M01-A): the full 64-bit source integer
+         * is range-validated BEFORE narrowing, so an out-of-range value can
+         * never wrap into a small valid-looking number (e.g. bitWidth
+         * 4294967297 must not become 1, uint32 defaultValue 4294967296 must
+         * not become 0). Semantic bounds of the field (bitWidth 1..32,
+         * valueType max, serializationVersion >= 1, ...) are still applied by
+         * the call site after this read. This is the single checked
+         * unsigned-32 parsing path for the registry JSON boundary.
+         *
+         * nlohmann quirk (reviewer round 2): is_number_integer() is true for
+         * BOTH signed and unsigned integer storage, so the unsigned branch
+         * must come first - otherwise a huge uint64 would be read via
+         * get<int64_t>() and wrap into a legal-looking negative/small value.
+         */
+        std::uint32_t requireUint32( const json &value, const std::string &where,
+                                     const std::string &field )
+        {
+            if( value.is_number_unsigned() )
+            {
+                const std::uint64_t v = value.get<std::uint64_t>();
+                if( v > 0xFFFFFFFFull )
+                    throw RegistryError( where + ": '" + field + "' exceeds the uint32 range" );
+                return static_cast<std::uint32_t>( v );
+            }
+            if( value.is_number_integer() )
+            {
+                const std::int64_t v = value.get<std::int64_t>();
+                if( v < 0 )
+                    throw RegistryError( where + ": '" + field + "' must not be negative" );
+                if( static_cast<std::uint64_t>( v ) > 0xFFFFFFFFull )
+                    throw RegistryError( where + ": '" + field + "' exceeds the uint32 range" );
+                return static_cast<std::uint32_t>( v );
+            }
+            throw RegistryError( where + ": '" + field + "' must be an unsigned integer" );
+        }
+
+        /**
+         * Checked JSON -> int32 read (M01-A): the same pre-narrowing range
+         * check for the signed registry fields (color channels, emission,
+         * minY/maxY), so values outside int32 can never wrap into the signed
+         * domain. Same nlohmann quirk: the unsigned branch is checked first,
+         * otherwise UINT64_MAX read via get<int64_t>() would become -1 and
+         * pass the signed range check. Call sites keep their semantic bounds
+         * (0..255, 0..15, ...).
+         */
+        std::int32_t requireInt32( const json &value, const std::string &where,
+                                   const std::string &field )
+        {
+            if( value.is_number_unsigned() )
+            {
+                const std::uint64_t v = value.get<std::uint64_t>();
+                if( v > static_cast<std::uint64_t>( std::numeric_limits<std::int32_t>::max() ) )
+                    throw RegistryError( where + ": '" + field + "' exceeds the int32 range" );
+                return static_cast<std::int32_t>( v );
+            }
+            if( value.is_number_integer() )
+            {
+                const std::int64_t v = value.get<std::int64_t>();
+                if( v < static_cast<std::int64_t>( std::numeric_limits<std::int32_t>::min() ) ||
+                    v > static_cast<std::int64_t>( std::numeric_limits<std::int32_t>::max() ) )
+                    throw RegistryError( where + ": '" + field + "' is outside the int32 range" );
+                return static_cast<std::int32_t>( v );
+            }
+            throw RegistryError( where + ": '" + field + "' must be an integer" );
         }
 
         Rgba8 parseColor( const json &value, const std::string &source, int index )
@@ -101,9 +160,7 @@ namespace world
                 std::uint8_t *channels[4] = { &result.r, &result.g, &result.b, &result.a };
                 for( std::size_t i = 0; i < value.size(); ++i )
                 {
-                    if( !value[i].is_number_integer() )
-                        throw RegistryError( where + ": 'color' channels must be integers" );
-                    const int channel = value[i].get<int>();
+                    const int channel = requireInt32( value[i], where, "color channel" );
                     if( channel < 0 || channel > 255 )
                         throw RegistryError( where + ": 'color' channels must be in 0..255" );
                     *channels[i] = static_cast<std::uint8_t>( channel );
@@ -131,6 +188,7 @@ namespace world
                                      std::to_string( maxValue ) );
             return value;
         }
+
 
         bool optionalBool( const json &entry, const std::string &source, int index,
                            const char *field, bool fallback )
@@ -233,7 +291,7 @@ namespace world
             "renderShape", "alphaMode", "alphaCutoff", "texture", "color", "normalMap",
             "reflectionMap", "roughness", "metalness", "reflection", "transparency",
             "refraction", "indexOfRefraction", "normalMapStrength", "receiveShadows",
-            "castShadows"
+            "castShadows", "visualTintProperty"
         };
         const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
 
@@ -274,9 +332,8 @@ namespace world
             }
             if( entry.contains( "emission" ) )
             {
-                if( !entry["emission"].is_number_integer() )
-                    throw RegistryError( context( source, index ) + ": 'emission' must be an integer" );
-                def.emission = entry["emission"].get<std::int32_t>();
+                def.emission = requireInt32( entry["emission"], context( source, index ),
+                                             "emission" );
                 if( def.emission < 0 || def.emission > 15 )
                     throw RegistryError( context( source, index ) + ": 'emission' must be in 0..15" );
             }
@@ -309,6 +366,12 @@ namespace world
             def.texture = optionalNonEmptyString( entry, source, index, "texture" );
             if( entry.contains( "color" ) )
                 def.color = parseColor( entry["color"], source, index );
+            def.visualTintProperty =
+                optionalNonEmptyString( entry, source, index, "visualTintProperty" );
+            if( !def.visualTintProperty.empty() && !isNamespacedId( def.visualTintProperty ) )
+                throw RegistryError( context( source, index ) +
+                                     ": 'visualTintProperty' must be namespaced as "
+                                     "<namespace>:<name>" );
 
             def.normalMap = optionalNonEmptyString( entry, source, index, "normalMap" );
             def.reflectionMap = optionalNonEmptyString( entry, source, index, "reflectionMap" );
@@ -659,15 +722,11 @@ namespace world
             }
             if( entry.contains( "minY" ) )
             {
-                if( !entry["minY"].is_number_integer() )
-                    throw RegistryError( context( source, index ) + ": 'minY' must be an integer" );
-                def.minY = entry["minY"].get<std::int32_t>();
+                def.minY = requireInt32( entry["minY"], context( source, index ), "minY" );
             }
             if( entry.contains( "maxY" ) )
             {
-                if( !entry["maxY"].is_number_integer() )
-                    throw RegistryError( context( source, index ) + ": 'maxY' must be an integer" );
-                def.maxY = entry["maxY"].get<std::int32_t>();
+                def.maxY = requireInt32( entry["maxY"], context( source, index ), "maxY" );
             }
             if( def.minY > def.maxY )
                 throw RegistryError( context( source, index ) + ": 'minY' > 'maxY'" );
@@ -785,17 +844,67 @@ namespace world
                                              ": property '" + propertyDef.id +
                                              "' requires 'defaultValue'" );
                     const json &defaultValue = property["defaultValue"];
-                    if( defaultValue.is_number_integer() ||
-                        defaultValue.is_number_unsigned() )
-                        propertyDef.defaultValue =
-                            PropertyValue{ static_cast<std::uint32_t>( defaultValue.get<int64_t>() ) };
-                    else if( defaultValue.is_number_float() )
-                        propertyDef.defaultValue =
-                            PropertyValue{ static_cast<float>( defaultValue.get<double>() ) };
-                    else
-                        throw RegistryError( context( source, index ) +
-                                             ": property '" + propertyDef.id +
-                                             "' defaultValue must be a number" );
+                    // M01-A numeric rule (ADR-029 follow-up): a prototype
+                    // property default is validated against the declared
+                    // sidecar type when one is registered, with one shared
+                    // documented JSON number rule:
+                    //  - float sidecar types accept any JSON number; integer
+                    //    syntax denotes the exact integral value, so `0` and
+                    //    `0.0` are the same default (mirrors the sidecars.json
+                    //    float rule).
+                    //  - integer sidecar types require unsigned integer
+                    //    syntax, and the full int64 is range-checked *before*
+                    //    narrowing: -1 must never wrap to 4294967295 and
+                    //    4294967296 must never truncate to 0.
+                    //    Legacy/programmatic parses without a sidecar registry
+                    //    apply the same range rule; the runtime WorldState
+                    //    still guards has()/get()/set() consistency (ADR-029).
+                    {
+                        const SidecarDef *declaredSidecar =
+                            sidecars ? sidecars->find( propertyDef.id ) : nullptr;
+                        if( declaredSidecar &&
+                            declaredSidecar->valueType == SidecarValueType::Float )
+                        {
+                            if( !defaultValue.is_number() )
+                                throw RegistryError( context( source, index ) +
+                                                     ": property '" + propertyDef.id +
+                                                     "' defaultValue must be a number for a float sidecar type" );
+                            propertyDef.defaultValue =
+                                PropertyValue{ defaultValue.get<float>() };
+                        }
+                        else if( defaultValue.is_number_integer() ||
+                                 defaultValue.is_number_unsigned() )
+                        {
+                            // Same checked unsigned-first path as the sidecar
+                            // fields: the full source integer is range-checked
+                            // before narrowing (is_number_integer() covers
+                            // unsigned storage too, so a direct
+                            // get<int64_t>() here could wrap UINT64_MAX into
+                            // -1 and then pass the range check).
+                            propertyDef.defaultValue =
+                                PropertyValue{ requireUint32( defaultValue,
+                                                              context( source, index ),
+                                                              "defaultValue" ) };
+                        }
+                        else if( defaultValue.is_number_float() )
+                        {
+                            // A declared integer sidecar rejects float syntax
+                            // (one numeric rule per type). Without a sidecar
+                            // registry the type is unknown; the legacy path
+                            // keeps the float default as-is and the runtime
+                            // WorldState still gates it (ADR-029).
+                            if( declaredSidecar )
+                                throw RegistryError( context( source, index ) +
+                                                     ": property '" + propertyDef.id +
+                                                     "' defaultValue must be an integer for an integer sidecar type" );
+                            propertyDef.defaultValue =
+                                PropertyValue{ defaultValue.get<float>() };
+                        }
+                        else
+                            throw RegistryError( context( source, index ) +
+                                                 ": property '" + propertyDef.id +
+                                                 "' defaultValue must be a number" );
+                    }
 
                     // M05 round 2: prototype properties are validated against
                     // sidecars.json at load time (ADR-027). A property without
@@ -811,6 +920,17 @@ namespace world
                                                  ": prototype '" + def.id +
                                                  "' declares property '" + propertyDef.id +
                                                  "' which is not a registered sidecar type" );
+                        // M01-B scope contract (#20): a prototype property is
+                        // per-block state, so it must reference a
+                        // block-scoped sidecar type. Runtime WorldState and
+                        // the loader share this identical rule.
+                        if( sidecar->scope != SidecarScope::Block )
+                            throw RegistryError( context( source, index ) +
+                                                 ": prototype '" + def.id +
+                                                 "' property '" + propertyDef.id +
+                                                 "' references sidecar type '" +
+                                                 propertyDef.id +
+                                                 "' which is not block-scoped" );
                         if( !world::valueFitsSidecarDef( *sidecar, propertyDef.defaultValue ) )
                         {
                             const std::string valueText =
@@ -844,10 +964,10 @@ namespace world
         }
     }
 
-bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
-                                     const BlockRegistry &blocks,
-                                     PrototypeRegistry &out,
-                                     const SidecarRegistry *sidecars )
+    bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
+                                         const BlockRegistry &blocks,
+                                         PrototypeRegistry &out,
+                                         const SidecarRegistry *sidecars )
     {
         const auto prototypesPath = dir / "prototypes.json";
         std::error_code error;
@@ -867,7 +987,7 @@ bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
             throw RegistryError( source + ": expected an object with a 'sidecars' array" );
 
         static const char *const allowed[] = {
-            "id", "displayName", "valueType", "defaultValue", "bitWidth",
+            "id", "displayName", "valueType", "scope", "defaultValue", "bitWidth",
             "storage", "persist", "serializationVersion"
         };
         const size_t allowedCount = sizeof( allowed ) / sizeof( allowed[0] );
@@ -888,6 +1008,32 @@ bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
                                      "' must be namespaced as <namespace>:<name>" );
             def.displayName = requireString( entry, source, index, "displayName" );
 
+            // M01-B scope contract (#20): 'scope' is a mandatory field of every
+            // registered sidecar type. A mod file may never guess its scope
+            // implicitly; unknown scope strings are a hard RegistryError.
+            // (The C++ SidecarDef{} default remains Block for programmatic
+            // fixtures only - data files must be explicit.)
+            if( !entry.contains( "scope" ) )
+                throw RegistryError( context( source, index ) +
+                                     ": sidecar '" + def.id +
+                                     "' requires a 'scope' field" );
+            if( !entry["scope"].is_string() )
+                throw RegistryError( context( source, index ) +
+                                     ": 'scope' must be a string" );
+            {
+                const std::string scope = entry["scope"].get<std::string>();
+                if( scope == "block" ) def.scope = SidecarScope::Block;
+                else if( scope == "chunk" ) def.scope = SidecarScope::Chunk;
+                else if( scope == "chunk_group" ) def.scope = SidecarScope::ChunkGroup;
+                else if( scope == "section" ) def.scope = SidecarScope::Section;
+                else if( scope == "region" ) def.scope = SidecarScope::Region;
+                else if( scope == "sector" ) def.scope = SidecarScope::Sector;
+                else
+                    throw RegistryError( context( source, index ) +
+                                         ": 'scope' must be one of 'block', 'chunk', "
+                                         "'chunk_group', 'section', 'region', 'sector'" );
+            }
+
             if( entry.contains( "valueType" ) )
             {
                 if( !entry["valueType"].is_string() )
@@ -904,12 +1050,17 @@ bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
 
             if( entry.contains( "bitWidth" ) )
             {
-                if( !entry["bitWidth"].is_number_unsigned() )
-                    throw RegistryError( context( source, index ) + ": 'bitWidth' must be an unsigned integer" );
-                def.bitWidth = entry["bitWidth"].get<std::uint32_t>();
-                if( def.bitWidth == 0u || def.bitWidth > 32u )
-                    throw RegistryError( context( source, index ) + ": 'bitWidth' must be in 1..32" );
-                if( def.valueType == SidecarValueType::Float )
+                def.bitWidth = requireUint32( entry["bitWidth"], context( source, index ),
+                                              "bitWidth" );
+                // Shared semantic with the runtime (validateSidecarDef):
+                // 0 = full type width, 1..32 explicit compact width.
+                if( def.bitWidth > 32u )
+                    throw RegistryError( context( source, index ) +
+                                         ": 'bitWidth' must be in 1..32 (0 = full type width)" );
+                // Identical to the shared validator: an EXPLICIT compact
+                // width (bitWidth != 0) never applies to float value types;
+                // bitWidth 0 ("full type width") is valid for float too.
+                if( def.valueType == SidecarValueType::Float && def.bitWidth != 0u )
                     throw RegistryError( context( source, index ) +
                                          ": 'bitWidth' only applies to integer value types" );
             }
@@ -925,10 +1076,8 @@ bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
                 }
                 else
                 {
-                    if( !entry["defaultValue"].is_number_unsigned() )
-                        throw RegistryError( where +
-                                             ": 'defaultValue' must be an unsigned integer" );
-                    const std::uint32_t value = entry["defaultValue"].get<std::uint32_t>();
+                    const std::uint32_t value =
+                        requireUint32( entry["defaultValue"], where, "defaultValue" );
 
                     const std::uint32_t typeMax = def.valueType == SidecarValueType::Uint8   ? 255u
                                                   : def.valueType == SidecarValueType::Uint16 ? 65535u
@@ -965,6 +1114,14 @@ bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
                 else
                     throw RegistryError( context( source, index ) +
                                          ": 'storage' must be 'sparse' or 'dense'" );
+                // M01-B (#20): hierarchy sidecars are sparse by contract.
+                // A dense declaration above the block tier must fail loudly
+                // instead of pretending the engine implements dense stores.
+                if( def.scope != SidecarScope::Block &&
+                    def.storage == SidecarStorageStrategy::Dense )
+                    throw RegistryError( context( source, index ) +
+                                         ": 'storage' 'dense' is not supported for sidecar "
+                                         "scopes above 'block' (hierarchy sidecars are sparse)" );
             }
 
             if( entry.contains( "persist" ) )
@@ -976,14 +1133,20 @@ bool RegistryLoader::loadPrototypes( const std::filesystem::path &dir,
 
             if( entry.contains( "serializationVersion" ) )
             {
-                if( !entry["serializationVersion"].is_number_unsigned() )
-                    throw RegistryError( context( source, index ) +
-                                         ": 'serializationVersion' must be an unsigned integer" );
-                def.serializationVersion = entry["serializationVersion"].get<std::uint32_t>();
+                def.serializationVersion =
+                    requireUint32( entry["serializationVersion"], context( source, index ),
+                                   "serializationVersion" );
                 if( def.serializationVersion == 0u )
                     throw RegistryError( context( source, index ) +
                                          ": 'serializationVersion' must be >= 1" );
             }
+
+            // M01-B review round 4: the loader and the runtime share the
+            // SAME structural validation (world::validateSidecarDef); the
+            // insert gate below would reject the same definition anyway.
+            // The explicit call keeps the precise field context in the
+            // error message.
+            world::validateSidecarDef( def, context( source, index ) );
 
             out.insert( def );
         }

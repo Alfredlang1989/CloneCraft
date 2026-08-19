@@ -36,9 +36,12 @@ Autonomous/local coding agents must not install or modify operating-system
 packages. Project-local third-party clones/builds are allowed. If a required
 system dependency is missing, the agent stops and reports it.
 
+OpenCode harness ownership: the Builder uses targeted builds/tests during
+implementation; the Planner owns Graphify refresh; the independent Reviewer is
+the only agent that runs the final `./compile.sh` acceptance gate.
+
 External build/test harnesses may use broader permissions only when the user
-has explicitly authorized that environment. This does not change the local
-agent rule above.
+has explicitly authorized that environment.
 
 
 ## Debug HUD dependency

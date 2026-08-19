@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <string>
 
 using namespace world;
@@ -441,6 +442,60 @@ namespace
                 ] })" ),
                 "test-resources.json", resources, blocks );
         }, "minY' > 'maxY'" );
+    }
+    TEST_CASE( resources_minY_maxY_are_range_checked_before_narrowing )
+    {
+        // M01-A reviewer round 2: UINT64_MAX is parsed as unsigned integer
+        // storage. is_number_integer() is true for that storage too, so a
+        // get<int64_t>() first would wrap UINT64_MAX into -1, which is a
+        // legal minY. The checked readers must reject the raw uint64 value
+        // before any narrowing.
+        expectRegistryError( [] {
+            const BlockRegistry blocks = loadBlocks(
+                R"({ "blocks": [ { "id": "core:stone", "displayName": "Stone" } ] })" );
+            ResourceRegistry resources;
+            RegistryLoader::parseResources(
+                nlohmann::json::parse( R"({ "resources": [
+                    { "id": "core:r", "displayName": "R", "blockId": "core:stone",
+                      "minY": 18446744073709551615 }
+                ] })" ),
+                "test-resources.json", resources, blocks );
+        }, "minY' exceeds the int32 range" );
+        expectRegistryError( [] {
+            const BlockRegistry blocks = loadBlocks(
+                R"({ "blocks": [ { "id": "core:stone", "displayName": "Stone" } ] })" );
+            ResourceRegistry resources;
+            RegistryLoader::parseResources(
+                nlohmann::json::parse( R"({ "resources": [
+                    { "id": "core:r", "displayName": "R", "blockId": "core:stone",
+                      "maxY": 18446744073709551615 }
+                ] })" ),
+                "test-resources.json", resources, blocks );
+        }, "maxY' exceeds the int32 range" );
+        expectRegistryError( [] {
+            const BlockRegistry blocks = loadBlocks(
+                R"({ "blocks": [ { "id": "core:stone", "displayName": "Stone" } ] })" );
+            ResourceRegistry resources;
+            RegistryLoader::parseResources(
+                nlohmann::json::parse( R"({ "resources": [
+                    { "id": "core:r", "displayName": "R", "blockId": "core:stone",
+                      "minY": 18446744071562067968 }
+                ] })" ),
+                "test-resources.json", resources, blocks );
+        }, "minY' exceeds the int32 range" );
+
+        // The signed int32 boundary itself stays legal for minY/maxY.
+        const BlockRegistry blocks = loadBlocks(
+            R"({ "blocks": [ { "id": "core:stone", "displayName": "Stone" } ] })" );
+        ResourceRegistry resources;
+        RegistryLoader::parseResources(
+            nlohmann::json::parse( R"({ "resources": [
+                { "id": "core:r", "displayName": "R", "blockId": "core:stone",
+                  "minY": -2147483648, "maxY": 2147483647 }
+            ] })" ),
+            "test-resources.json", resources, blocks );
+        CHECK_EQ( resources.get( "core:r" ).minY, std::numeric_limits<std::int32_t>::min() );
+        CHECK_EQ( resources.get( "core:r" ).maxY, std::numeric_limits<std::int32_t>::max() );
     }
     TEST_CASE( block_defaults_do_not_claim_transparent_and_opaque_at_once )
     {

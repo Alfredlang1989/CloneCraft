@@ -42,7 +42,7 @@ namespace world
     ChunkMeshBuilder::ChunkMeshBuilder( const BlockIdTable &table,
                                         const BlockRegistry &blocks )
         : mTable( table ), mOpaque( table.size(), 0u ), mNeedsTangent( table.size(), 0u ),
-          mCrossShape( table.size(), 0u )
+          mCrossShape( table.size(), 0u ), mPerVoxelVisual( table.size(), 0u )
     {
         for( std::size_t i = 1; i < mTable.size(); ++i )
         {
@@ -50,6 +50,7 @@ namespace world
             mOpaque[i] = def.opaque ? 1u : 0u;
             mNeedsTangent[i] = def.normalMap.empty() ? 0u : 1u;
             mCrossShape[i] = def.renderShape == BlockRenderShape::Cross ? 1u : 0u;
+            mPerVoxelVisual[i] = def.visualTintProperty.empty() ? 0u : 1u;
         }
     }
 
@@ -72,7 +73,8 @@ namespace world
         auto emitQuad = [&mesh, this]( std::uint16_t blockId,
                                  const std::int32_t pos[4][3],
                                  const std::int8_t n[3],
-                                 const float uv[4][2] ) {
+                                 const float uv[4][2],
+                                 const std::int32_t owner[3] ) {
             // Tangent generation is only required by materials that actually
             // have a normal map. Most terrain blocks do not; skipping the
             // gradient/sqrt work removes it from the hot meshing path.
@@ -130,6 +132,9 @@ namespace world
                 vertex.u = uv[c][0];
                 vertex.v = uv[c][1];
                 vertex.blockId = blockId;
+                vertex.ownerX = owner[0];
+                vertex.ownerY = owner[1];
+                vertex.ownerZ = owner[2];
                 mesh.vertices.push_back( vertex );
             }
         };
@@ -232,14 +237,17 @@ namespace world
                         if( taken[start] || grid[start] == 0 )
                             continue;
                         const std::uint16_t id = grid[start];
+                        const bool perVoxelVisual =
+                            id < mPerVoxelVisual.size() && mPerVoxelVisual[id] != 0u;
 
                         std::int32_t w = 1;
-                        while( v + w < EDGE && !taken[cell( u, v + w )] &&
+                        while( !perVoxelVisual && v + w < EDGE &&
+                               !taken[cell( u, v + w )] &&
                                grid[cell( u, v + w )] == id )
                             ++w;
 
                         std::int32_t h = 1;
-                        bool canExtend = true;
+                        bool canExtend = !perVoxelVisual;
                         while( u + h < EDGE && canExtend )
                         {
                             for( std::int32_t k = 0; k < w; ++k )
@@ -285,7 +293,12 @@ namespace world
                             static_cast<std::int8_t>( d.sliceAxis == 1 ? d.sign : 0 ),
                             static_cast<std::int8_t>( d.sliceAxis == 2 ? d.sign : 0 )
                         };
-                        emitQuad( id, pos, n, uv );
+                        const std::int32_t owner[3] = {
+                            d.sliceAxis == 0 ? s : d.uAxis == 0 ? u : v,
+                            d.sliceAxis == 1 ? s : d.uAxis == 1 ? u : v,
+                            d.sliceAxis == 2 ? s : d.uAxis == 2 ? u : v
+                        };
+                        emitQuad( id, pos, n, uv, owner );
 
                         for( std::int32_t du = 0; du < h; ++du )
                             for( std::int32_t dv = 0; dv < w; ++dv )
@@ -300,7 +313,10 @@ namespace world
         // culling; four quads per voxel therefore render the X from either side.
         const auto emitCrossQuad = [&mesh]( std::uint16_t blockId,
                                             const float pos[4][3],
-                                            const float normal[3] ) {
+                                            const float normal[3],
+                                            std::int32_t ownerX,
+                                            std::int32_t ownerY,
+                                            std::int32_t ownerZ ) {
             for( int c = 0; c < 4; ++c )
             {
                 MeshVertex vertex;
@@ -309,6 +325,9 @@ namespace world
                 vertex.u = ( c == 1 || c == 2 ) ? 1.0f : 0.0f;
                 vertex.v = ( c >= 2 ) ? 0.0f : 1.0f;
                 vertex.blockId = blockId;
+                vertex.ownerX = ownerX;
+                vertex.ownerY = ownerY;
+                vertex.ownerZ = ownerZ;
                 mesh.vertices.push_back( vertex );
             }
         };
@@ -332,7 +351,7 @@ namespace world
                         { fx,        fy + 1.0f, fz }
                     };
                     const float n0[3] = { INV_SQRT2, 0.0f, -INV_SQRT2 };
-                    emitCrossQuad( id, p0, n0 );
+                    emitCrossQuad( id, p0, n0, x, y, z );
                     const float p0Back[4][3] = {
                         { fx + 1.0f, fy,        fz + 1.0f },
                         { fx,        fy,        fz },
@@ -340,7 +359,7 @@ namespace world
                         { fx + 1.0f, fy + 1.0f, fz + 1.0f }
                     };
                     const float n0Back[3] = { -INV_SQRT2, 0.0f, INV_SQRT2 };
-                    emitCrossQuad( id, p0Back, n0Back );
+                    emitCrossQuad( id, p0Back, n0Back, x, y, z );
 
                     const float p1[4][3] = {
                         { fx + 1.0f, fy,        fz },
@@ -349,7 +368,7 @@ namespace world
                         { fx + 1.0f, fy + 1.0f, fz }
                     };
                     const float n1[3] = { INV_SQRT2, 0.0f, INV_SQRT2 };
-                    emitCrossQuad( id, p1, n1 );
+                    emitCrossQuad( id, p1, n1, x, y, z );
                     const float p1Back[4][3] = {
                         { fx,        fy,        fz + 1.0f },
                         { fx + 1.0f, fy,        fz },
@@ -357,7 +376,7 @@ namespace world
                         { fx,        fy + 1.0f, fz + 1.0f }
                     };
                     const float n1Back[3] = { -INV_SQRT2, 0.0f, -INV_SQRT2 };
-                    emitCrossQuad( id, p1Back, n1Back );
+                    emitCrossQuad( id, p1Back, n1Back, x, y, z );
                 }
     }
 } // namespace world
