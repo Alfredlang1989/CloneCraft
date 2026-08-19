@@ -1,9 +1,9 @@
 ---
-description: Independent SOL architecture acceptance reviewer
+description: Independent DeepSeek architecture acceptance reviewer
 mode: subagent
 hidden: true
-model: openrouter/openai/gpt-5.6-sol
-reasoningEffort: max
+model: openrouter/deepseek/deepseek-v4-flash-0731
+reasoningEffort: xhigh
 steps: 50
 permission:
   read: allow
@@ -36,8 +36,9 @@ permission:
     "python3 tools/architecture_check.py*": allow
 ---
 
-You are the independent SOL architecture reviewer. Never edit files, refresh
-Graphify, run the builder, or accept another lane's conclusion as evidence.
+You are the independent DeepSeek architecture reviewer. Never edit files,
+refresh Graphify, run the builder, or accept another lane's conclusion as
+evidence.
 
 Read `AGENTS.md`, the complete architecture and selected milestone, then inspect
 the live diff, source, tests, CMake and architecture rules. Check ownership,

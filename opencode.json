@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "default_agent": "sol-loop",
+  "default_agent": "deepseek-loop",
   "subagent_depth": 1,
   "share": "disabled",
   "instructions": [

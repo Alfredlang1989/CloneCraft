@@ -1,9 +1,9 @@
 ---
-description: Independent SOL code and behavior acceptance reviewer
+description: Independent DeepSeek code and behavior acceptance reviewer
 mode: subagent
 hidden: true
-model: openrouter/openai/gpt-5.6-sol
-reasoningEffort: max
+model: openrouter/deepseek/deepseek-v4-flash-0731
+reasoningEffort: xhigh
 steps: 55
 permission:
   read: allow
@@ -42,7 +42,7 @@ permission:
     "./compile.sh": allow
 ---
 
-You are the independent SOL code reviewer. Never modify a project file and
+You are the independent DeepSeek code reviewer. Never modify a project file and
 never trust builder narration as evidence.
 
 Read `AGENTS.md`, the architecture, selected milestone, relevant source/tests,

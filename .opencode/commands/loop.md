@@ -1,6 +1,6 @@
 ---
 description: Build or review exactly one current OmniGrid milestone
-agent: sol-loop
+agent: deepseek-loop
 subtask: false
 ---
 
@@ -31,7 +31,8 @@ $ARGUMENTS
 
 Do not start the following milestone. A `REVIEW PENDING` candidate is reviewed
 before any new builder work. An `OPEN` candidate receives one compact task
-packet for @deepseek-builder. After every builder pass SOL refreshes Graphify
-once, then dispatches @sol-review-code and @sol-review-architecture against the
-same snapshot. Findings go back to the builder in bounded cycles. Stop on dual
-acceptance, a real blocker, or the cycle limit; never stage, commit or push.
+packet for @deepseek-builder. After every builder pass the primary orchestrator
+refreshes Graphify once, then dispatches @deepseek-review-code and
+@deepseek-review-architecture against the same snapshot. Findings go back to
+the builder in bounded cycles. Stop on dual acceptance, a real blocker, or the
+cycle limit; never stage, commit or push.
