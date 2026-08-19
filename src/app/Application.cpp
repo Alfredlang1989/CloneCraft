@@ -65,6 +65,13 @@ namespace app
                 if( show ) updateDebugOverlay( std::chrono::steady_clock::now(), true );
             }
         } );
+        // M02-D: the real player input path - click intent flows through the
+        // CommunicationEnvelope/router only, never through ChunkManager.
+        mInput->setOnMouseButton( [this]( int button, bool pressed ) {
+            if( !pressed || !mPlayerInteraction ) return;
+            if( button == 1 ) handleBlockInteraction( true );  // left:  place
+            else if( button == 3 ) handleBlockInteraction( false ); // right: remove
+        } );
 
         mRenderer = std::make_unique<render::OgreRenderer>();
         mRenderer->setCrosshairConfig( mUiConfig.crosshair );
@@ -114,10 +121,48 @@ namespace app
             mWorldState = std::make_unique<world::WorldState>( mChunks, mIdTable, mSidecars,
                                                                mPrototypes );
             mWorldState->setPersistenceSink( &mPersistenceSink );
+            mWorldState->setOnChange(
+                [this]( const world::BlockAddress &address, const std::string &what ) {
+                    updateBlockVisualTint( address, what );
+                } );
+            // M02-D / M03 Round 1: one production communication bus + the
+            // block command handlers + the player interaction controller -
+            // the only mutation path from input. The bus owns the single
+            // message-id source; gameplay input runs through its SYNCHRONOUS
+            // dispatch() convenience (validation + router execution, outputs
+            // in the DispatchResult - the A/B queues are reserved for async
+            // producers like the Round-2 timer worker).
+            world::communication::registerBlockCommandHandlers( mCommunicationBus,
+                                                                 *mWorldState );
+            mPlayerInteraction = std::make_unique<world::interaction::PlayerInteractionController>(
+                mChunks, mCommunicationBus );
+            // Creative default selection: the first non-AIR runtime id of the
+            // loaded data - the core must not hardcode content ids.
+            mSelectedRuntimeId = 0;
+            for( std::uint16_t candidate = 1; candidate < mIdTable.size(); ++candidate )
+            {
+                if( !mIdTable.idOf( candidate ).empty() )
+                {
+                    mSelectedRuntimeId = candidate;
+                    break;
+                }
+            }
+            mPlayerInteraction->setSelectedRuntimeId( mSelectedRuntimeId );
             try {
                 mGenConfig = worldgen::loadWorldGenConfig( mContentRoot.path / "worldgen.json" );
                 mWorldGen = std::make_unique<worldgen::WorldGen>( mGenConfig, mBlocks, mIdTable, mBiomes );
             } catch( const std::exception &error ) { core::logError( std::string( "Worldgen initialization failed: " ) + error.what() ); return false; }
+            try {
+                mGameplayContent = world::scripting::GameplayContentRuntime::loadIfPresent(
+                    mContentRoot.path, mCommunicationBus, mScheduler, *mWorldState, mIdTable,
+                    [this]( const world::BlockAddress &column ) {
+                        return mWorldGen->surfaceHeight( column );
+                    } );
+            } catch( const std::exception &error ) {
+                core::logError( std::string( "Gameplay content initialization failed: " ) +
+                                error.what() );
+                return false;
+            }
         }
         else
         {
@@ -191,6 +236,81 @@ namespace app
         if( mSelectionRenderer ) mSelectionRenderer->setSelection( mTargetBlock ? std::optional<world::BlockAddress>( mTargetBlock->block ) : std::nullopt );
     }
 
+    void Application::handleBlockInteraction( bool primary )
+    {
+        if( !mPlayerInteraction )
+            return;
+        const camera::MovementBasis basis = mCamera.basis();
+        const double maxDistance = mUiConfig.blockSelection.maxDistance;
+        const world::WorldPosition origin = cameraWorldPosition();
+        const auto outcome = primary
+            ? mPlayerInteraction->pressPrimary( origin, basis.forward.x, basis.forward.y,
+                                                basis.forward.z, maxDistance )
+            : mPlayerInteraction->pressSecondary( origin, basis.forward.x, basis.forward.y,
+                                                  basis.forward.z, maxDistance );
+        if( !outcome.picked )
+            return; // nothing targeted: user intent, no world mutation
+        if( outcome.replies.empty() )
+            return;
+        // Reply handling is purely logical/correlated (no function pointer
+        // is ever stored in an envelope).
+        for( const auto &reply : outcome.replies )
+            logInteractionReply( primary
+                                     ? world::communication::ACTION_BLOCK_PLACE
+                                     : world::communication::ACTION_BLOCK_REMOVE,
+                                 reply );
+    }
+
+    void Application::logInteractionReply(
+        const std::string &action, const world::communication::CommunicationEnvelope &reply ) const
+    {
+        const auto *result = std::get_if<world::communication::CommandResultPayload>( &reply.payload );
+        if( !result )
+            return;
+        if( result->ok )
+            core::logInfo( "interaction " + action + " accepted (reply " +
+                           std::to_string( reply.messageId ) + ")" );
+        else
+            core::logWarn( "interaction " + action + " rejected: " + result->error );
+    }
+
+    void Application::updateBlockVisualTint( const world::BlockAddress &address,
+                                              const std::string &what )
+    {
+        if( !mWorldRenderer || !mWorldState )
+            return;
+        const std::optional<std::uint16_t> runtimeId = mWorldState->blockAt( address );
+        if( !runtimeId || *runtimeId == 0u )
+        {
+            if( what == "block" )
+                mWorldRenderer->setBlockTint( address, std::nullopt );
+            return;
+        }
+        const world::BlockDef &block = mBlocks.get( mIdTable.idOf( *runtimeId ) );
+        if( what != "block" && what != block.visualTintProperty )
+            return;
+        if( block.visualTintProperty.empty() )
+        {
+            mWorldRenderer->setBlockTint( address, std::nullopt );
+            return;
+        }
+
+        std::optional<world::Rgba8> tint;
+        const std::optional<world::PropertyValue> value =
+            mWorldState->get( address, block.visualTintProperty );
+        if( value && std::holds_alternative<std::uint32_t>( *value ) )
+        {
+            const std::uint32_t packed = std::get<std::uint32_t>( *value );
+            if( packed != 0u )
+                tint = world::Rgba8{
+                    static_cast<std::uint8_t>( packed >> 24u ),
+                    static_cast<std::uint8_t>( packed >> 16u ),
+                    static_cast<std::uint8_t>( packed >> 8u ),
+                    static_cast<std::uint8_t>( packed ) };
+        }
+        mWorldRenderer->setBlockTint( address, tint );
+    }
+
     std::string Application::buildDebugOverlayText() const
     {
         if( !mRenderer || !mWorldGen ) return "Omnigrid debug: initializing...";
@@ -253,6 +373,27 @@ namespace app
         const auto now = std::chrono::steady_clock::now();
         const float dt = std::min( std::chrono::duration_cast<std::chrono::duration<float>>( now - mLastTick ).count(), 0.1f );
         mLastTick = now; mInput->pollEvents(); if( !mRunning ) return; moveCamera( dt ); updateCameraView();
+        if( mGameplayContent && !mGameplayBootstrapFailed )
+        {
+            try
+            {
+                (void)mGameplayContent->updateBootstraps();
+            }
+            catch( const std::exception &error )
+            {
+                mGameplayBootstrapFailed = true;
+                core::logError( std::string( "Gameplay bootstrap failed: " ) + error.what() );
+            }
+        }
+        // M03 Round 2/4: drain due delayed messages into the bus and pump the
+        // async path on the owner/game thread (the timer worker never touches
+        // the bus, Lua, WorldState or the renderer).
+        if( mGameplayContent )
+        {
+            (void)mScheduler.drainDueTo( mCommunicationBus );
+            while( mCommunicationBus.pendingInbound() > 0u )
+                (void)mCommunicationBus.pumpOne();
+        }
         if( mWorldRenderer ) mWorldRenderer->sync( mChunks );
         updateBlockTarget(); updateDebugOverlay( now );
     }
@@ -260,7 +401,8 @@ namespace app
     void Application::shutdown()
     {
         if( !mRunning && !mRenderer ) return;
-        mRunning = false; mTargetBlock.reset(); mSelectionRenderer.reset(); mWorldRenderer.reset(); mStreaming.reset(); mWorldGen.reset();
+        mRunning = false; mTargetBlock.reset(); mGameplayContent.reset();
+        mSelectionRenderer.reset(); mWorldRenderer.reset(); mStreaming.reset(); mWorldGen.reset();
         if( mRenderer ) { mRenderer->shutdown(); mRenderer.reset(); }
         mInput.reset(); if( mPlatform ) { mPlatform->shutdown(); mPlatform.reset(); }
     }

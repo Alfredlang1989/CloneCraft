@@ -4,7 +4,9 @@
 #include "world/registry/BlockIdTable.h"
 #include "world/registry/ObjectRef.h"
 #include "world/registry/Registry.h"
+#include "world/state/HierarchySidecarStore.h"
 #include "world/state/PersistenceSink.h"
+#include "world/state/WorldStateTarget.h"
 
 #include <cstdint>
 #include <functional>
@@ -64,6 +66,24 @@ namespace world
         /** @return true when the stored state actually changed. */
         bool set( const BlockAddress &, const std::string &propertyId, const PropertyValue &value );
 
+        // -- scope-aware property API (M01-B, #20) ----------------------------
+        // One logical resolver contract for every hierarchy tier:
+        // Block | Chunk | ChunkGroup | Section | Region | Sector. The target
+        // scope must equal the registered SidecarDef.scope, otherwise the
+        // operation is rejected (a block property can never be written to a
+        // region and vice versa). Block references preserve the full
+        // prototype-aware semantics; Chunk and higher tiers resolve
+        // stored override -> SidecarDef default (no prototype inheritance in
+        // M01-B, no implicit parent->child). Hierarchy writes never
+        // materialize chunks/groups/sections/regions/sectors - only sparse
+        // metadata is stored at the canonical address.
+        bool has( const WorldStateTarget &, const std::string &propertyId ) const;
+        std::optional<PropertyValue> get( const WorldStateTarget &,
+                                          const std::string &propertyId ) const;
+        /** @return true when the stored state actually changed. */
+        bool set( const WorldStateTarget &, const std::string &propertyId,
+                  const PropertyValue &value );
+
         // -- central block mutation ------------------------------------------
         /** @return true when the block actually changed (no-op writes are
          *  not dirty and not persisted). Replacing a block invalidates its
@@ -78,9 +98,22 @@ namespace world
 
         // -- dirty hooks ------------------------------------------------------
         /** Granular change hook; `what` is "block" for setBlock(), otherwise
-         *  the property id. Fires only for real changes (never for no-ops). */
+         *  the property id. Fires only for real changes (never for no-ops).
+         *  Block-scope path. */
         using ChangeCallback = std::function<void( const BlockAddress &, const std::string &what )>;
         void setOnChange( ChangeCallback callback ) { mOnChange = std::move( callback ); }
+
+        /** Scope-aware change hook (M01-B): fires for real hierarchy-scope
+         *  property changes (Chunk .. Sector) and delivers the canonical
+         *  target + property id. Consumers (renderer/simulation/streaming)
+         *  decide which scope/property changes interest them - a Region
+         *  property change never triggers a mesh rebuild implicitly. */
+        using TargetChangeCallback =
+            std::function<void( const WorldStateTarget &, const std::string &what )>;
+        void setOnTargetChange( TargetChangeCallback callback )
+        {
+            mOnTargetChange = std::move( callback );
+        }
 
         // -- persistence-dirty abstraction (M05, backend comes in M09) --------
         void setPersistenceSink( PersistenceSink *sink ) { mPersistenceSink = sink; }
@@ -96,12 +129,29 @@ namespace world
         PropertyValue logicalDefaultFor( const PrototypeDef &, const SidecarDef &,
                                          const PrototypePropertyDef & ) const;
         void emitChange( const BlockAddress &, const std::string &what );
+        void emitTargetChange( const WorldStateTarget &, const std::string &what );
+        /** Generic change language: always fires the target hook, and for
+         *  block scope additionally the legacy block hook. */
+        void emitAnyChange( const WorldStateTarget &, const std::string &what );
+        /** Block-scope capability gate (prototype-aware, M05). */
+        bool hasBlock( const BlockAddress &, const std::string &propertyId,
+                       const SidecarDef * ) const;
+        std::optional<PropertyValue> getBlock( const BlockAddress &,
+                                               const std::string &propertyId,
+                                               const SidecarDef * ) const;
+        bool setBlock( const BlockAddress &, const std::string &propertyId,
+                       const SidecarDef *, const PropertyValue &value );
 
         ChunkManager &mChunks;
         const BlockIdTable &mIdTable;
         const SidecarRegistry &mSidecars;
         const PrototypeRegistry &mPrototypes;
         ChangeCallback mOnChange;
+        TargetChangeCallback mOnTargetChange;
         PersistenceSink *mPersistenceSink = nullptr;
+        /** Sparse scope-aware storage for Chunk .. Sector (M01-B #20).
+         *  World-data layer; the Block tier continues to live in the Chunk
+         *  sidecars (prototype-aware, untouched). */
+        HierarchySidecarStore mHierarchyStore;
     };
 } // namespace world

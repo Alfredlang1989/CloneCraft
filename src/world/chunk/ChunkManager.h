@@ -36,10 +36,10 @@ namespace world
                                const PropertyValue &value, const PropertyValue &defaultValue );
         std::optional<PropertyValue> blockProperty( const BlockAddress &,
                                                     const std::string &typeId ) const;
-        const Sidecar<PropertyValue> *chunkPropertySidecar( const ChunkAddress &,
+        const Sidecar<PropertyValue> *blockPropertySidecarInChunk( const ChunkAddress &,
                                                             const std::string &typeId ) const;
         /** @return true when a sidecar of the type actually existed. */
-        bool clearChunkProperty( const ChunkAddress &, const std::string &typeId );
+        bool clearBlockPropertySidecarInChunk( const ChunkAddress &, const std::string &typeId );
 
         // Orientation pilot shim (compat + convenience, issue #3 section 5).
         // Stored through the generic sidecar path under the data-driven id

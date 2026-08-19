@@ -4,8 +4,10 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "world/chunk/ChunkManager.h"
@@ -63,6 +65,13 @@ namespace render
         void sync( world::ChunkManager &chunks );
         void shutdown();
 
+        /** Generic, data-driven per-block visual tint. The tint is keyed by
+         *  canonical block address and applied on the next mesh rebuild.
+         *  Content/property mapping stays outside the renderer; passing
+         *  std::nullopt restores the BlockDef material. */
+        void setBlockTint( const world::BlockAddress &block,
+                           const std::optional<world::Rgba8> &tint );
+
     private:
         struct ChunkObject
         {
@@ -95,9 +104,18 @@ namespace render
 
         void rebuildManualObject( Ogre::ManualObject *manual,
                                   const world::ChunkMesh &mesh,
-                                  bool castShadows );
+                                  bool castShadows,
+                                  const world::ChunkAddress &chunk );
         bool meshContainsShadowClass( const world::ChunkMesh &mesh, bool castShadows ) const;
         void positionChunkNode( const world::ChunkAddress &chunk, Ogre::SceneNode *node ) const;
+        /** Resolves the canonical emitting block recorded by the mesh. */
+        world::BlockAddress blockAddressAt( const world::ChunkAddress &chunk,
+                                            const world::MeshVertex &vertex ) const;
+        /** M03 Round 4: returns (creating on demand) a tinted material
+         *  variant for a block type + tint. Generic - keyed by block type and
+         *  tint, never by block name. */
+        const std::string *tintedMaterialNameFor( std::uint16_t blockId,
+                                                  const world::Rgba8 &tint );
 
         Ogre::Root *mRoot = nullptr;
         Ogre::SceneManager *mSceneManager = nullptr;
@@ -108,6 +126,12 @@ namespace render
 
         std::map<std::uint16_t, BlockMaterial> mMaterials;
         std::vector<std::uint8_t> mCastShadowsByBlock;
+        // M03 Round 4: generic per-block visual tints (canonical address ->
+        // tint). Applied during mesh rebuild; no block-name special-casing.
+        std::map<world::BlockAddress, world::Rgba8> mBlockTints;
+        // Tinted material variants, keyed by (blockId, tint). Created on
+        // demand from the base BlockDef material.
+        std::map<std::pair<std::uint16_t, world::Rgba8>, std::string> mTintedMaterials;
 
         // Meshing is a hot streaming path. Keep registry-derived caches and
         // vector capacity alive across dirty chunks instead of reconstructing

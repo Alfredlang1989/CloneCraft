@@ -12,13 +12,18 @@ namespace world
         mDirtyChunks.insert( address.chunk );
     }
 
-void MemoryPersistenceSink::onPropertyChanged( const BlockAddress &address,
-                                               const std::string &propertyId,
-                                               std::optional<PropertyValue> value )
+    void MemoryPersistenceSink::onPropertyChanged( const WorldStateTarget &target,
+                                                   const std::string &propertyId,
+                                                   std::optional<PropertyValue> value )
     {
-        mPropertyDeltas[{ address, propertyId }] =
-            PropertyDelta{ address, propertyId, value };
-        mDirtyChunks.insert( address.chunk );
+        // Block-scope records keep the legacy BlockAddress convenience key;
+        // hierarchy scopes (Chunk .. Sector) are keyed by their canonical
+        // target identity. Only block-scope changes have a chunk to mark
+        // dirty - a hierarchy property never implies a chunk-mesh rebuild.
+        if( target.isBlock() )
+            mDirtyChunks.insert( target.asBlock().chunk );
+        mPropertyDeltas.insert_or_assign( std::pair{ target, propertyId },
+                                          PropertyDelta{ target, propertyId, value } );
     }
 
     void MemoryPersistenceSink::flush()

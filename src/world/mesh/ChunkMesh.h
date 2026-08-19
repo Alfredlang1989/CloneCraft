@@ -27,6 +27,13 @@ namespace world
         float u = 0.0f;
         float v = 0.0f;
         std::uint16_t blockId = 0; // material/texture selection in renderer
+        // Local voxel that emitted this quad. Face-plane vertices alone are
+        // ambiguous on positive faces (the plane is at owner+1), so render
+        // projections consume this explicit owner instead of guessing with
+        // floor(vertex). All four vertices of a quad carry the same owner.
+        std::int32_t ownerX = 0;
+        std::int32_t ownerY = 0;
+        std::int32_t ownerZ = 0;
     };
 
     struct ChunkMesh

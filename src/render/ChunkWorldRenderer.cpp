@@ -47,6 +47,25 @@ namespace render
         constexpr const char *RESOURCE_GROUP = "General";
         constexpr std::uint32_t GENERATED_TEXTURE_SIZE = 16u;
 
+        /** M03 Round 4: mesh-section grouping key (block id + optional tint).
+         *  Namespace scope (NOT a local class) so the friend operator< is
+         *  legal and std::map<SectionKey, ...> can order it. */
+        struct SectionKey
+        {
+            std::uint16_t blockId = 0;
+            std::optional<world::Rgba8> tint;
+            friend bool operator<( const SectionKey &l, const SectionKey &r )
+            {
+                if( l.blockId != r.blockId )
+                    return l.blockId < r.blockId;
+                if( l.tint.has_value() != r.tint.has_value() )
+                    return l.tint.has_value() < r.tint.has_value();
+                if( !l.tint.has_value() )
+                    return false; // both nullopt
+                return *l.tint < *r.tint; // Rgba8 has a generic operator<
+            }
+        };
+
         std::string safeResourceName( const std::string &id )
         {
             std::string result = id;
@@ -504,10 +523,90 @@ namespace render
         return true;
     }
 
+    const std::string *ChunkWorldRenderer::tintedMaterialNameFor( std::uint16_t blockId,
+                                                                  const world::Rgba8 &tint )
+    {
+        // Generic tinted material variant, keyed by (block type, tint) - never
+        // by block name. Created on demand from the base BlockDef material.
+        const auto key = std::make_pair( blockId, tint );
+        const auto existing = mTintedMaterials.find( key );
+        if( existing != mTintedMaterials.end() )
+            return &existing->second;
+
+        const auto baseIt = mMaterials.find( blockId );
+        if( baseIt == mMaterials.end() )
+            return nullptr;
+        const BlockMaterial &base = baseIt->second;
+
+        Ogre::HlmsManager *hlmsManager = mRoot->getHlmsManager();
+        Ogre::HlmsPbs *hlmsPbs =
+            static_cast<Ogre::HlmsPbs *>( hlmsManager->getHlms( Ogre::HLMS_PBS ) );
+        if( !hlmsPbs )
+            return nullptr;
+
+        const std::string tintedName = std::string( MATERIAL_PREFIX ) + "Tint/" +
+                                       safeResourceName( mTable.idOf( blockId ) ) + "_" +
+                                       std::to_string( tint.r ) + "_" +
+                                       std::to_string( tint.g ) + "_" +
+                                       std::to_string( tint.b ) + "_" +
+                                       std::to_string( tint.a );
+
+        Ogre::HlmsMacroblock macroblock;
+        Ogre::HlmsBlendblock blendblock;
+        Ogre::HlmsPbsDatablock *datablock =
+            static_cast<Ogre::HlmsPbsDatablock *>( hlmsPbs->createDatablock(
+                Ogre::IdString( tintedName ), tintedName, macroblock, blendblock,
+                Ogre::HlmsParamVec() ) );
+        if( !datablock )
+            return nullptr;
+
+        // Reuse the base material's diffuse texture (if any) and apply the
+        // tint as a background diffuse. Generic - keyed by block type + tint.
+        if( base.diffuseTexture )
+        {
+            Ogre::HlmsSamplerblock samplerblock;
+            samplerblock.setAddressingMode( Ogre::TextureAddressingMode::TAM_WRAP );
+            datablock->setTexture( Ogre::PBSM_DIFFUSE, base.diffuseTexture, &samplerblock );
+        }
+        const Ogre::ColourValue tintLinear = jsonColorToLinear( tint );
+        datablock->setBackgroundDiffuse( tintLinear );
+        datablock->setDiffuse( Ogre::Vector3::UNIT_SCALE );
+
+        mTintedMaterials.emplace( key, tintedName );
+        return &mTintedMaterials.find( key )->second;
+    }
+
     const std::string *ChunkWorldRenderer::materialNameFor( std::uint16_t blockId ) const
     {
         const auto it = mMaterials.find( blockId );
         return it == mMaterials.end() ? nullptr : &it->second.materialName;
+    }
+
+    void ChunkWorldRenderer::setBlockTint( const world::BlockAddress &block,
+                                           const std::optional<world::Rgba8> &tint )
+    {
+        // Generic per-block visual tint, keyed by the canonical block address
+        // - never by block name. std::nullopt clears the override (the block
+        // returns to its BlockDef material).
+        if( tint )
+            mBlockTints[block] = *tint;
+        else
+            mBlockTints.erase( block );
+        // Mark the owning chunk dirty so the tint is applied on the next sync.
+        mDirty.insert( block.chunk );
+    }
+
+    world::BlockAddress ChunkWorldRenderer::blockAddressAt( const world::ChunkAddress &chunk,
+                                                            const world::MeshVertex &vertex ) const
+    {
+        // The mesh builder records the emitting voxel explicitly. A positive
+        // face lies at owner+1, so floor(vertex) would select its neighbour.
+        const world::LocalBlockCoord local{
+            vertex.ownerX,
+            vertex.ownerY,
+            vertex.ownerZ
+        };
+        return world::blockAt( chunk, local );
     }
 
     bool ChunkWorldRenderer::meshContainsShadowClass( const world::ChunkMesh &mesh,
@@ -607,6 +706,16 @@ namespace render
 
             if( !chunk )
             {
+                // Tint state is a bounded presentation projection of loaded
+                // WorldState. Drop it with residency so a later reload cannot
+                // inherit stale per-instance visuals.
+                for( auto tintIt = mBlockTints.begin(); tintIt != mBlockTints.end(); )
+                {
+                    if( tintIt->first.chunk == c )
+                        tintIt = mBlockTints.erase( tintIt );
+                    else
+                        ++tintIt;
+                }
                 if( objIt != mObjects.end() )
                 {
                     destroyManual( objIt->second.shadowCaster );
@@ -663,7 +772,7 @@ namespace render
                     manual->setLocalAabb( aabb );
                     obj.node->attachObject( manual );
                 }
-                rebuildManualObject( manual, mesh, casts );
+                rebuildManualObject( manual, mesh, casts, c );
             };
 
             // Two objects at most per chunk lets JSON castShadows be honoured
@@ -676,7 +785,8 @@ namespace render
 
     void ChunkWorldRenderer::rebuildManualObject( Ogre::ManualObject *manual,
                                                    const world::ChunkMesh &mesh,
-                                                   bool castShadows )
+                                                   bool castShadows,
+                                                   const world::ChunkAddress &chunk )
     {
         manual->clear();
 
@@ -686,18 +796,18 @@ namespace render
             return;
         }
 
-        // Greedy builder emits four unique vertices per quad. Group quads
-        // by block id so each Ogre ManualObject section uses exactly one
-        // repeatable block texture/material.
-        // Runtime block ids are dense, so a vector is both simpler and faster
-        // than a tree-map plus node allocations for every chunk rebuild.
-        std::vector<std::vector<std::size_t>> quadsByBlock( mTable.size() );
+        // Greedy builder emits four unique vertices per quad. Group quads by
+        // (block id, optional tint) so each Ogre ManualObject section uses
+        // exactly one repeatable block texture/material. The tint is resolved
+        // GENERICALLY from the per-block tint map (keyed by canonical block
+        // address) - never by block name.
+        std::map<SectionKey, std::vector<std::size_t>> quadsBySection;
         for( std::size_t base = 0; base < mesh.vertices.size(); base += 4u )
         {
             const std::uint16_t blockId = mesh.vertices[base].blockId;
             if( blockId == 0 )
                 continue;
-            if( blockId >= quadsByBlock.size() )
+            if( blockId >= mTable.size() )
             {
                 core::logError( "Chunk mesh contains invalid runtime block id " +
                                 std::to_string( blockId ) );
@@ -713,23 +823,30 @@ namespace render
                 core::logError( "Chunk mesh invariant broken: one quad contains mixed block ids" );
                 continue;
             }
-            quadsByBlock[blockId].push_back( base );
+            // Resolve the per-block tint (if any) from the canonical address.
+            const world::BlockAddress blockAddr = blockAddressAt( chunk, mesh.vertices[base] );
+            const auto tintIt = mBlockTints.find( blockAddr );
+            std::optional<world::Rgba8> tint =
+                tintIt == mBlockTints.end() ? std::nullopt
+                                            : std::optional<world::Rgba8>( tintIt->second );
+            quadsBySection[SectionKey{ blockId, tint }].push_back( base );
         }
 
         std::size_t selectedQuadCount = 0u;
-        for( const auto &quads : quadsByBlock )
+        for( const auto &[key, quads] : quadsBySection )
             selectedQuadCount += quads.size();
         manual->estimateVertexCount( selectedQuadCount * 4u );
         manual->estimateIndexCount( selectedQuadCount * 6u );
 
-        for( std::size_t blockIndex = 1; blockIndex < quadsByBlock.size(); ++blockIndex )
+        for( const auto &[key, quadBases] : quadsBySection )
         {
-            const std::uint16_t blockId = static_cast<std::uint16_t>( blockIndex );
-            const auto &quadBases = quadsByBlock[blockIndex];
+            const std::uint16_t blockId = key.blockId;
             if( quadBases.empty() )
                 continue;
 
-            const std::string *materialName = materialNameFor( blockId );
+            const std::string *materialName =
+                key.tint ? tintedMaterialNameFor( blockId, *key.tint )
+                         : materialNameFor( blockId );
             if( !materialName )
             {
                 core::logError( "No material for runtime block id " + std::to_string( blockId ) );
@@ -792,6 +909,11 @@ namespace render
             // makes renderer re-initialisation in the same Ogre Root safe.
             if( hlmsPbs )
             {
+                for( const auto &[key, materialName] : mTintedMaterials )
+                {
+                    (void)key;
+                    hlmsPbs->destroyDatablock( Ogre::IdString( materialName ) );
+                }
                 for( const auto &[blockId, material] : mMaterials )
                 {
                     (void)blockId;
@@ -826,6 +948,8 @@ namespace render
         mMeshScratch.vertices.clear();
         mMeshScratch.vertices.shrink_to_fit();
         mMaterials.clear();
+        mTintedMaterials.clear();
+        mBlockTints.clear();
         mCastShadowsByBlock.clear();
         mDirty.clear();
         mListening = false;

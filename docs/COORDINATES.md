@@ -48,5 +48,9 @@ coordinate dependency.
 Ogre keeps its own smaller sticky render anchor. Render rebases may therefore be
 frequent and cheap without forcing a DynamicSpace/Jolt rebase.
 
-See `DYNAMIC_SPACE.md`, `HIERARCHICAL_COORDINATES.md` and
-`PHASE2_VALIDATION.md`.
+Worldgen must fold/hash hierarchy digits directly rather than flattening the
+address first. Relative streaming/rendering use bounded deltas. The complete
+logical address space is intentionally far beyond ordinary flat integer/floating
+coordinate ranges; it is an address space, never a dense allocation.
+
+See `DYNAMIC_SPACE.md` for the local dynamic-object frame.

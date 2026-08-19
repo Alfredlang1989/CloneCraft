@@ -14,16 +14,18 @@
     {"name":"world.worldgen","prefix":"src/world/worldgen/","mayDependOn":["world.worldgen","world.coordinates","world.registry","core"]},
     {"name":"world.chunk","prefix":"src/world/chunk/","mayDependOn":["world.chunk","world.coordinates","world.registry","world.worldgen","core"]},
     {"name":"world.state","prefix":"src/world/state/","mayDependOn":["world.state","world.chunk","world.registry","world.coordinates","core"]},
-    {"name":"world.interaction","prefix":"src/world/interaction/","mayDependOn":["world.interaction","world.coordinates","world.chunk","world.state","core"]},
+    {"name":"world.interaction","prefix":"src/world/interaction/","mayDependOn":["world.interaction","world.coordinates","world.chunk","world.state","world.communication","core"]},
+    {"name":"world.communication","prefix":"src/world/communication/","mayDependOn":["world.communication","world.state","world.coordinates","world.registry","core"]},
+    {"name":"world.scripting","prefix":"src/world/scripting/","mayDependOn":["world.scripting","world.communication","world.state","world.worldgen","world.coordinates","world.registry","core"]},
     {"name":"world.mesh","prefix":"src/world/mesh/","mayDependOn":["world.mesh","world.coordinates","world.registry","world.chunk","core"]},
     {"name":"render","prefix":"src/render/","mayDependOn":["render","core","platform","debug","world.coordinates","world.registry","world.chunk","world.mesh","world.worldgen","ui","config"]},
-    {"name":"app","prefix":"src/app/","mayDependOn":["app","core","debug","camera","input","platform","render","world.coordinates","world.registry","world.worldgen","world.chunk","world.state","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"]},
+    {"name":"app","prefix":"src/app/","mayDependOn":["app","core","debug","camera","input","platform","render","world.coordinates","world.registry","world.worldgen","world.chunk","world.state","world.mesh","ui","world.interaction","world.communication","world.scripting","config","spatial.dynamic","spatial.bridge"]},
     {"name":"main","prefix":"src/main.cpp","mayDependOn":["main","app","core"]}
   ],
   "ignoreIncludePrefixes":["third_party/"],
   "warnCppLinesAbove":500,
   "externalIncludePolicies":[
-    {"modules":["core","debug","camera","world.coordinates","world.registry","world.worldgen","world.chunk","world.state","world.mesh","ui","world.interaction","config","spatial.dynamic","spatial.bridge"],"forbiddenPrefixes":["SDL3/","Ogre","Hlms/","Math/Simple/Ogre"]},
+    {"modules":["core","debug","camera","world.coordinates","world.registry","world.worldgen","world.chunk","world.state","world.mesh","ui","world.interaction","world.communication","world.scripting","config","spatial.dynamic","spatial.bridge"],"forbiddenPrefixes":["SDL3/","Ogre","Hlms/","Math/Simple/Ogre"]},
     {"modules":["input","platform"],"forbiddenPrefixes":["Ogre","Hlms/","Math/Simple/Ogre"]},
     {"modules":["render"],"forbiddenPrefixes":["SDL3/"]}
   ],
@@ -34,6 +36,7 @@
     {"modules":["render"],"pattern":"static_cast\\s*<\\s*float\\s*>\\s*\\([^\\n;]*BLOCKS_PER_(?:CHUNK|GROUP)_EDGE","message":"do not cast absolute chunk/group coordinates directly to float; subtract render anchor first"},
     {"modules":["app","camera","render","world.coordinates","world.worldgen","world.chunk","world.mesh","world.interaction"],"pattern":"\\b(?:BlockCoord|ChunkCoord|GroupCoord)\\b","message":"flattened/global spatial coordinate types are forbidden; use hierarchical *Address types"},
     {"modules":["world.worldgen"],"pattern":"\\b(?:checkedChunkOrigin|globalBlock|globalChunk|absoluteBlock|absoluteChunk)\\b","message":"worldgen must not flatten hierarchical addresses into global block/chunk coordinates"},
-    {"modules":["camera"],"pattern":"\\bworld::","message":"camera must stay independent from hierarchical world coordinates; use spatial::dynamic types"}
+    {"modules":["camera"],"pattern":"\\bworld::","message":"camera must stay independent from hierarchical world coordinates; use spatial::dynamic types"},
+    {"modules":["app","world.scripting","render"],"pattern":"\"test:[A-Za-z0-9_.:-]+\"","message":"production engine modules must not hard-code test/content ids; move content semantics to data/Lua/registries"}
   ]
 }

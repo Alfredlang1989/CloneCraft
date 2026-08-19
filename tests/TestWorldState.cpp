@@ -26,7 +26,7 @@ namespace
     }
 
     const std::string PILOT_SIDECARS = R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "Orientation", "valueType": "uint8",
+        { "id": "core:orientation", "displayName": "Orientation", "scope": "block", "valueType": "uint8",
           "defaultValue": 0, "bitWidth": 3, "storage": "sparse" } ]})";
 
     const std::string ORIENTED_PROPERTIES =
@@ -121,7 +121,7 @@ TEST_CASE( world_state_prototype_default_wins_over_sidecar_default )
 {
     // Prototype default 20.5 differs from the sidecar type default 15.0.
     const std::string sidecars = R"({"sidecars":[
-        { "id": "mod:heat", "displayName": "Heat", "valueType": "float", "defaultValue": 15.0 } ]})";
+        { "id": "mod:heat", "displayName": "Heat", "scope": "block", "valueType": "float", "defaultValue": 15.0 } ]})";
     const std::string properties = R"([ { "id": "mod:heat", "defaultValue": 20.5 } ])";
     Fixture f( sidecars, properties );
 
@@ -274,9 +274,9 @@ TEST_CASE( world_state_property_change_invalidates_boundary_neighbors )
 TEST_CASE( world_state_persist_false_properties_never_reach_sink )
 {
     const std::string sidecars = R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "Orientation", "valueType": "uint8",
+        { "id": "core:orientation", "displayName": "Orientation", "scope": "block", "valueType": "uint8",
           "defaultValue": 0, "bitWidth": 3, "storage": "sparse" },
-        { "id": "core:transient", "displayName": "Transient", "valueType": "uint8",
+        { "id": "core:transient", "displayName": "Transient", "scope": "block", "valueType": "uint8",
           "defaultValue": 0, "persist": false } ]})";
     const std::string properties =
         R"([ { "id": "core:orientation", "defaultValue": 0 },
@@ -369,7 +369,7 @@ TEST_CASE( world_state_shared_property_defaults_are_write_order_independent )
     // chunk-wide baked default: B creating the sidecar first must not make
     // A's value 1 "disappear" (M05 review round 2, HIGH).
     const std::string sidecars = R"({"sidecars":[
-        { "id": "mod:p", "displayName": "P", "valueType": "uint8", "defaultValue": 0 } ]})";
+        { "id": "mod:p", "displayName": "P", "scope": "block", "valueType": "uint8", "defaultValue": 0 } ]})";
 
     const auto build = [&]() {
         struct World
@@ -443,9 +443,9 @@ TEST_CASE( world_state_shared_property_defaults_are_write_order_independent )
 TEST_CASE( world_state_persist_false_property_is_not_reported_when_block_is_replaced )
 {
     const std::string sidecars = R"({"sidecars":[
-        { "id": "core:orientation", "displayName": "Orientation", "valueType": "uint8",
+        { "id": "core:orientation", "displayName": "Orientation", "scope": "block", "valueType": "uint8",
           "defaultValue": 0, "bitWidth": 3, "storage": "sparse" },
-        { "id": "core:transient", "displayName": "Transient", "valueType": "uint8",
+        { "id": "core:transient", "displayName": "Transient", "scope": "block", "valueType": "uint8",
           "defaultValue": 0, "persist": false } ]})";
     const std::string properties =
         R"([ { "id": "core:orientation", "defaultValue": 0 },

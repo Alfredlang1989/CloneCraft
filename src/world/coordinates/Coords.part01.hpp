@@ -35,6 +35,24 @@
             !validLocal( a.block.z, BLOCKS_PER_CHUNK_EDGE ) )
             throw std::invalid_argument( "non-canonical BlockAddress" );
     }
+    // The logical super-tier views validate their local digits exactly like
+    // GroupAddress does (M01-B #20); Sector is the unbounded outermost digit.
+    inline void requireCanonical( const RegionAddress &a )
+    {
+        if( !validLocal( a.region.x, REGIONS_PER_SECTOR_EDGE ) ||
+            !validLocal( a.region.y, REGIONS_PER_SECTOR_EDGE ) ||
+            !validLocal( a.region.z, REGIONS_PER_SECTOR_EDGE ) )
+            throw std::invalid_argument( "non-canonical RegionAddress" );
+    }
+    inline void requireCanonical( const SectionAddress &a )
+    {
+        requireCanonical( RegionAddress{ a.sector, a.region } );
+        if( !validLocal( a.section.x, SECTIONS_PER_REGION_EDGE ) ||
+            !validLocal( a.section.y, SECTIONS_PER_REGION_EDGE ) ||
+            !validLocal( a.section.z, SECTIONS_PER_REGION_EDGE ) )
+            throw std::invalid_argument( "non-canonical SectionAddress" );
+    }
+    inline void requireCanonical( const SectorAddress & ) {}
 
     namespace detail
     {

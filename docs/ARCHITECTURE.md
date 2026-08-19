@@ -1,204 +1,355 @@
-# Architecture
+# OmniGrid architecture contract
 
-## Goal
+## Authority
 
-A modular, data-driven 3D voxel sandbox with deterministic, unbounded world.
-Feature mass is secondary; architecture quality, small verifiable steps,
-documentation for later LLM agents, and a working git state per milestone
-are primary.
+This file is the canonical, non-negotiable architecture contract for OmniGrid.
+Every planner, builder and reviewer MUST read it completely before acting.
 
-## Stack / dependency assumptions
+If source code, a milestone plan, an old ADR, a report, a test shortcut or a
+historical document conflicts with this contract, the contract wins. Do not
+silently reinterpret it. Stop planning or review and report the conflict.
 
-- Language: C++17 minimum, C++20 preferred for application code
-- Build: CMake, Ninja
-- Window/Input: SDL3. The uploaded development-machine build metadata points
-  at an SDL3 installation, but agents must re-audit the actual machine rather
-  than assuming a version/path.
-- Renderer: OgreNext. The uploaded prototype was built against OgreNext 4.x-era
-  APIs; inspect installed headers/pkg-config before changing renderer code.
-- Physics: Jolt (not installed yet; intended project-locally under
-  third_party/, fixed timestep)
-- Scripting: Lua 5.4 (not installed as dev package; only runtime .so present;
-  planned project-local build under third_party/)
-- Config/data: JSON via bundled header-only nlohmann/json 3.12.0 under `third_party/nlohmann/`
-- Noise: v16 OpenSimplex2S behind a hierarchical ChunkGroup phase mapper, plus a very-low-frequency hierarchy-hashed coordinate warp; world addresses are never flattened into global floating point
+Detailed domain documents may refine this contract but may not weaken it.
+`tools/architecture_rules.json` is the executable dependency firewall and must
+be kept aligned with this contract as modules are added.
 
-## Ownership and module layout
+## 1. Core philosophy: mechanisms in C++, concepts in content
 
-Application owns all subsystems and their lifetime; it does not own the
-engine logic itself.
+The C++ core is deliberately dumb.
 
-    src/
-        app/            Application (lifecycle, main loop)
-        core/           Config, Logging
-        platform/       PlatformWindowBridge (SDL window native handle for Ogre)
-        input/          InputManager (SDL_PollEvent mapping)
-        debug/          renderer-independent diagnostic snapshot formatting
-        ui/             strict data-driven UI configuration
-        render/         OgreRenderer + Ogre presentation backend
-        world/          coordinates, blocks, chunks, interaction/picking, groups, streaming,
-                        generation, meshing, persistence
-        physics/        PhysicsContext (Jolt anchored world)
-        entity/         EntityManager
-        scripting/      LuaRuntime (controlled engine API)
-        mods/           ModManager (manifest/JSON discovery, namespaces)
+C++ may own generic mechanisms such as storage, routing, scheduling, numeric
+runtime IDs, serialization, geometry primitives, physics integration and
+render projections. It MUST NOT know gameplay concepts merely because current
+content uses them.
 
-## Content root and ownership contract
+Forbidden in generic production C++:
 
-Content lives strictly below the *content root*:
+- hard-coded game/content IDs or branches such as `test:block_a`, `ore:iron`,
+  `pickaxe`, `tnt`, `tree`, `red_block`, etc.;
+- gameplay-specific meaning encoded in generic Sidecar, ECS, transport,
+  renderer or persistence infrastructure;
+- special treatment for the bundled/default game that ordinary mods cannot use.
 
-    <install>/MODS/<mod>/          one directory per installed mod
-    <install>/MODS/Default/        always shipped; blocks, biomes, resources,
-                                   prototypes, worldgen.json + worldgen/*.lua,
-                                   ui.json + ui/, textures/
+Persistent content identity is a stable namespaced string at content/storage
+boundaries. Runtime C++ may map aliases to compact numeric IDs and operate on
+those IDs. Runtime numeric IDs are not automatically stable persistence or
+network identities.
 
-The active mod is chosen by the `mod` key in `settings.json`
-(`config::Settings::mod`, default `Default`). `config::resolveContentRoot()`
-implements the contract:
+`core:air` / runtime block id 0 is the explicit engine-level AIR exception.
+AIR does not mean "chunk unloaded".
 
-1. configured mod is a plain directory name (path traversal is rejected) and
-   `MODS/<mod>` exists  -> that directory
-2. otherwise `MODS/Default` exists -> `Default` (fallback)
-3. otherwise -> empty path; the C++ core must still start without content
+## 2. Content and Lua ownership
 
-The application resolves the content root relative to its own executable
-first (the build installs a `MODS` symlink next to the binary, see
-CMakeLists.txt) and falls back to the current working directory, so the game
-finds its content regardless of where it was launched from.
+Gameplay/content belongs outside the generic engine mechanisms.
 
-Ownership is strict: the core owns *mechanisms* (JSON/Lua parsing, voxel
-storage, worldgen engine, registry/handle machinery); content owns *concepts*
-(cactus, furnaces, biomes, geology rules). Core code must never hardcode a
-content id (`core:air` and the AIR runtime index are the only structural
-exceptions). Content ids are stable and namespaced; runtime handles are
-load-order independent hashes (see `docs/REGISTRY.md` "Runtime prototype
-handles"). The renderer receives the resolved content path from
-Application and tolerates an empty one.
+Target ownership is two Lua/content layers:
 
-### Hybrid block lifecycle: cold -> sidecar -> active ECS
+1. a generic developer/API layer reusable by every game/mod and containing no
+   game-specific semantics;
+2. game-specific logic belonging to the active game and its mods.
 
-Blocks are never permanently classified as "voxel" or "entity" (issue #3,
-section 6). A block starts *cold* (voxel only). Blocks that need extra state
-become *warm*: the chunk holds one or more sparse sidecars (orientation today,
-temperature/damage/power later), created lazily on first non-default write and
-dropped when the last entry returns to default (issue #3, section 5). A block
-becomes *hot* only when it needs frequent simulation - enTT projection comes
-in M08 and is explicitly not the world, just the active runtime cache. The
-unified world-state API (M05) hides which layer a property lives in.
+The target content layout is `/Game/Core/` for the active game's own logic and
+`/Game/Mods/` for mods. The current `MODS/Default` tree is transitional legacy
+layout, not a privileged "vanilla" architecture. New generic engine features
+must not depend on `Default` semantics.
 
-Sidecar state is strictly subordinated to the voxel it belongs to: state is
-only written for positions whose block actually needs it (orientation writes
-to AIR are rejected), and replacing a block — including by AIR — clears its
-stale sidecar entries. No zombie sidecar state survives a block change, so a
-warm block can always fall back to cold without leaking state.
+Lua may request mechanisms through the public API and the one communication
+contract. Lua does not receive mutable raw engine internals, ChunkManager
+mutation access, raw Sidecar stores or renderer/physics ownership.
 
-### Unified world state (M05)
+Future data-driven component/property systems must remain registerable without
+hard-coding gameplay component names into the C++ core. Implementation details
+may use typed C++ internally, but the architecture must leave a registry/schema
+boundary for game/mod-defined semantics.
 
-`world::WorldState` (src/world/state/) is the single game-facing entry point
-for block and block-property state — the hard rule is that callers (Lua/game
-code) never know whether a value comes from a prototype default, stored
-sidecar state or (from M08 on) the ECS hot layer. It is prototype-aware:
-`has()` answers "does this object support property X" (true exactly when the
-block's prototype declares the property in `prototypes.json` *and* the id
-resolves to a registered sidecar type in `sidecars.json`), `get()`
-resolves stored override -> prototype default -> sidecar type default, and
-`set()` stores a per-block override of the prototype default. AIR, unloaded
-chunks and scenery blocks without a prototype own no properties. Values are
-validated against the declared sidecar `valueType` and `bitWidth` at runtime,
-unknown/undeclared ids and AIR positions are rejected, and writes never
-create chunks. Stored state lives in the generic per-chunk sidecar storage
-(registry-driven since M05, no hardcoded sidecar members in Chunk).
+## 3. Technical namespace policy
 
-Prototype-aware removal is write-order independent: two prototypes sharing one
-sidecar type in the same chunk with different logical defaults never lose
-values, because `Sidecar::setWithDefault` decides the "remove the override
-again" threshold against the object's own default per write, not against a
-chunk-wide baked default. Prototype properties are additionally cross-validated
-against `sidecars.json` at load time (property id exists, default fits the
-declared type/bitWidth), so `has()`/`get()`/`set()` cannot diverge for
-registered content.
+Namespaces/categories stay coarse and technical, not gameplay-taxonomic.
+Examples of the intended style are:
 
-Mutations are centralised: gameplay code places blocks through
-`WorldState::setBlock` (which rejects runtime ids outside the `BlockIdTable`
-and never materializes a chunk for a vacuous AIR write on an unloaded
-position; ChunkManager's `setBlock` returns whether the block actually
-changed, so no-ops are never dirty). `WorldState` fires granular
-change hooks (`what` = `"block"` or the property id), invalidates boundary
-neighbours for block *and* property changes (mesh/neighbour invalidation),
-and feeds a `PersistenceSink` abstraction — dirty-chunk and last-write-wins
-delta records today (`MemoryPersistenceSink`, including property removals,
-`persist: false` filtering on the property-set *and* the block-replacement
-path), RocksDB backend in M09. Worldgen base load
-(`assignBlocks` via the streaming manager) stays outside the unified mutation
-path; it is not a gameplay mutation. The orientation pilot shims on
-ChunkManager read and write exactly the same `core:orientation` sidecar as the
-unified world state.
+- `Worldgen::` for world-generation algorithms/passes;
+- `Core::` only for core mechanisms;
+- `Block::` for block types/content bridges;
+- `Item::` for item types/content bridges;
+- `Entity::` for living/dynamic entity mechanisms.
 
-## Main loop
+Do not create namespaces merely because a game concept sounds like a category.
+Plants, for example, are blocks when represented as blocks; they do not need a
+special engine namespace merely for being plants.
 
-    while (running) {
-        input.pollEvents();          // full SDL event queue drain
-        application.runFrameUpdate();  // prototype currently variable dt
-        world.processCompletedJobs();  // streamed worldgen results
-        renderer.renderFrame();        // independent render rate
-    }
+Existing lowercase/source-layout namespaces are not required to be renamed by
+an unrelated milestone. The rule constrains future architecture and refactors.
 
-The current camera update uses clamped variable frame delta. The method is now
-named `runFrameUpdate()` so it no longer claims to be a fixed simulation step.
-A true accumulator/fixed simulation tick remains a pending invariant before
-physics/gameplay simulation.
+## 4. One authoritative world state
 
-Shutdown is ordered: stop loop -> drop gameplay objects -> drop Ogre
-resources/window -> destroy Root -> destroy SDL window -> SDL_Quit.
+There is one authoritative logical world-state language.
 
-## Window ownership
+`WorldState` is the game-facing authority for persistent/logical voxel state
+and sparse properties. Gameplay must not mutate normal world state by reaching
+around it into ChunkManager, Sidecar containers, ECS projections, renderer
+objects, Jolt bodies or persistence backends.
 
-SDL owns the native window and all window state. OgreNext never creates its
-own native window; it is attached to the SDL window via a platform bridge.
-No SDL_Renderer ever exists. Gameplay code never sees HWND/Display/surfaces.
+Authoritative mutation path:
 
-Implementation status: milestone 01 delivered Application + InputManager +
-PlatformWindowBridge (X11) + OgreRenderer (OgreNext 4.0.0 GL3+ attached to
-the SDL window, external-window mode, clear-colour workspace). See
-docs/RENDERER.md for binding and resize details.
+`producer -> CommunicationEnvelope -> router/handler -> WorldState`
 
-## World model
+Worldgen/materialization may use its documented base-world loading path, but
+must not become a second gameplay mutation API.
 
-Conceptually gigantic 3D. Spatial identity is hierarchical: `Sector(int64) -> Region(int64 local) -> Group(int64 local) -> Chunk(int64 local) -> Block(int64 local)`. No global BlockCoord/ChunkCoord exists. Continuous positions are `BlockAddress + sub-block fraction`; rendering uses only a small position relative to a sticky `GroupAddress` anchor. World-field noise folds the hierarchy into the OpenSimplex transformed-lattice phase once per ChunkGroup and samples from small group-local coordinates. A hierarchy-hashed low-pass warp prevents a simple finite-permutation wallpaper repeat without replacing the v16 local noise morphology.
+Sidecars are sparse typed facts/constraints attached to canonical addresses.
+They store state, not policy. Schedulers/services interpret them. Do not invent
+parallel special-purpose state stores when an existing registered hierarchical
+property expresses the same fact. Registered content may declare generic
+persistence/residency requirements for properties that must remain present for
+systems such as power networks; that requirement is metadata/policy input, not
+a reason to build a subsystem-specific state database.
 
-## Decision / conflict notes
+Spatial Sidecar scopes are canonical Block, Chunk, ChunkGroup, Section, Region
+and Sector identities. Section/Region/Sector remain logical sparse address
+tiers and MUST NOT imply gigantic materialized containers.
 
-Where code and docs disagree, docs are updated after verifying actual state.
-System dependencies are never modified; missing libs are built project-locally
-under third_party/ or documented in docs/MISSING_DEPENDENCIES.md.
-## Automated architecture gate
+Global game/world state such as world time, day cycle or astronomy is a
+separate World-scope concern. Do not fake global state by attaching it to an
+arbitrary Sector/Region/block.
 
-`tools/architecture_check.py` reads `tools/architecture_rules.json` and runs on
-every normal `compile.sh` invocation. It hard-fails forbidden project include
-directions, module cycles, project include cycles and duplicate header
-basenames. Large translation units are reported as warnings. `clang-tidy` is
-the complementary C++ AST/semantic pass. See `docs/STATIC_ANALYSIS.md`.
+Fast query/index mechanisms such as "does this chunk contain block ID X?" and
+"return local positions of block ID X" may be derived/cache structures, but
+must not become competing authoritative block stores.
 
-## Data-driven worldgen boundary
+## 5. Projections are not authorities
 
-`world.worldgen` is an execution engine, not the owner of geology semantics.
-The active chunk path loads Lua-backed scalar fields and generic JSON pass
-definitions, evaluates fields/passes concurrently, and deterministically merges
-`BlockProposal` arrays. Concrete rules such as stone, topsoil, gravel or cave
-subtraction live in `MODS/Default/worldgen.json` and `MODS/Default/worldgen/*.lua`.
+The voxel/logical world remains authoritative. Other systems are projections:
 
-The registry owns block semantic tags used by replacement rules and the biome
-terrain profiles. `WorldGen` receives the immutable `BiomeRegistry` once during
-construction, resolves each biome's `terrainMaskField` to a 2D worldgen field,
-and blends the biome terrain parameters into the shared surface field before
-passes run. Chunk streaming itself still only asks `WorldGen` for a dense
-runtime-ID buffer and owns no biome/material-selection logic.
+- enTT: hot/active ECS projection;
+- Jolt: active physics projection;
+- OgreNext: render projection;
+- client render/cache state: presentation projection.
 
-World generation has a hard semantic stage barrier: base `terrain` passes run first,
-then `addon` passes mutate that completed terrain (caves, rivers, tunnels, sealing,
-sediment, future geology addons), and only then does the runtime execute the separate
-data-driven decoration phase. Immutable anchor sets are generated from 2D fields, then
-`scatter`, `column` and bounded Lua `structure` passes run independently and are
-merged deterministically. Multi-pass structures such as tree wood/leaves share
-only immutable anchor coordinates/seeds, so workers never exchange mutable
-structure state. Cross-chunk reach is declared by structure bounds.
+A projection may cache or derive data needed for its job. It may not become a
+second source of truth for persistent gameplay state.
+
+Promotion into a projection and demotion back out must preserve the logical
+state contract. Persistent identity must not be a raw `entt::entity`, Jolt body
+handle, Ogre object pointer or other process-local handle.
+
+## 6. One communication contract
+
+`CommunicationEnvelope` and the one communication runtime/router are the
+permanent communication model.
+
+The contract carries Command, Event, Query and Reply semantics with stable
+fields for sender, receiver, context, action, target, payload, message ID and
+correlation/reply semantics.
+
+Do not create a second gameplay event object, action envelope, physics bus,
+fluid queue, UI bus, timer callback channel or gameplay-specific network
+message universe.
+
+The current `CommunicationRuntime` may later be extracted/renamed into the
+standalone `OmniComBus` framework. That extraction must make the bus more
+generic, not create a second bus or pull OmniGrid/game semantics into the
+framework. OmniGrid consumes the communication mechanism; the mechanism must
+not depend on OmniGrid content concepts.
+
+`replyTo` is a logical reply address. It is not spare payload space for block
+coordinates or arbitrary data.
+
+Producers such as input, Lua, UI, Jolt contacts, timers and network sessions
+must enter the same logical routing/mutation architecture. They may have
+transport/adaptor code, not alternate gameplay semantics.
+
+## 7. Scheduler and threading rules
+
+Authoritative gameplay mutation and communication dispatch occur on the owner
+/game thread unless a later milestone explicitly defines a safe ownership
+change without violating this contract.
+
+Workers may perform bounded independent work, I/O, timing or analysis. They
+must hand results back as transportable data/envelopes. Worker threads must not
+hold or call Lua references, gameplay callbacks, mutable WorldState references,
+renderer objects or other owner-thread state.
+
+The delayed-message scheduler stores transportable envelopes, never function
+pointers, `std::function`, Lua references or WorldState references. Due messages
+re-enter the normal communication runtime on the owner thread.
+
+Threading is introduced at module boundaries, not by sprinkling shared mutable
+state across existing classes.
+
+## 8. Coordinates and huge-world precision
+
+Persistent spatial identity is hierarchical integer addressing:
+
+`Sector -> Region -> Section -> ChunkGroup -> Chunk -> Block`
+
+Carry/borrow is checked digit by digit. Outer overflow rejects; it never wraps.
+Do not flatten astronomical world coordinates into one global integer or
+float/double XYZ.
+
+Persistent world storage, worldgen, chunks, streaming and meshing use the
+hierarchical integer model.
+
+Dynamic objects use local floating-point `DynamicSpace`. The explicit
+World/Dynamic bridge owns conversion. Player/NPC/vehicle/projectile/future Jolt
+bodies that interact in one active island share that local space and rebase
+transactionally.
+
+The Ogre render anchor is a separate presentation origin and may rebase more
+often. ChunkGroup, DynamicSpace, render anchor and future Jolt physics islands
+are different concepts.
+
+## 9. Rendering and physics boundaries
+
+SDL3 owns native window/event polling. OgreNext is the renderer. Do not add an
+SDL renderer or leak Ogre types into world/core modules.
+
+Renderer state is derived from authoritative world state. Visual features may
+use generic registered visual data, but the renderer must not contain
+content-specific block/game semantics.
+
+Jolt integration is future active physics projection. Normal voxels must not
+become one Jolt body/entity per block. Static terrain collision is derived in
+coarse/greedy structures appropriate to the active physics region. Collision
+configuration is data-driven with sparse overrides where required.
+
+Jolt contacts that need gameplay effects enter the same communication router.
+No physics-special gameplay bus.
+
+## 10. enTT boundary
+
+M04 introduces enTT only as active/hot projection. WorldState and the
+communication contract stay semantically stable.
+
+Persistent/logical entity identity is distinct from raw `entt::entity`.
+Promotion/demotion owns the mapping and must be lossless for persistent state.
+
+ECS must not become the hidden authoritative store for normal voxel blocks or
+persistent Sidecars.
+
+## 11. Persistence boundary
+
+Persistence is behind a backend-neutral interface. RocksDB is an implementation
+backend, not a gameplay API.
+
+Persist stable logical identities and versioned schemas. Do not persist raw
+process handles, raw `entt::entity`, renderer/Jolt handles or runtime-only
+numeric IDs without a stable mapping contract.
+
+Base world plus deltas and sparse Sidecars must survive restart. Writes that
+form one logical change need crash-consistent batching semantics.
+
+Timer persistence requires an explicit durable time model. Never persist raw
+`steady_clock::time_point` values.
+
+I/O workers do I/O/serialization work and hand completed data back through
+owned queues/contracts. They do not mutate gameplay state from worker threads.
+
+## 12. Client/server boundary
+
+The server owns authoritative WorldState, active ECS authority/projection
+coordination and persistence.
+
+Standalone singleplayer is client + embedded server. The client must not bypass
+the server merely because both live in one process.
+
+Transport carries the same CommunicationEnvelope semantics. In-process,
+loopback and future network transports differ only in transport mechanics.
+No gameplay-specific `NetworkMessage` universe may appear beside the bus.
+
+## 13. Construction boundary
+
+Construction uses one geometry/shape spine and one writer/mutation spine.
+Blueprints must reuse M07 shapes/writer rather than creating a second geometry
+engine.
+
+Large operations cross the Lua/C++ boundary as compact operations, not one Lua
+call per block. Bulk writes still respect WorldState validation, dirtying,
+invalidation, chunk boundaries and communication ownership.
+
+## 14. Residency and future systems
+
+Materialization, World/Data residency, Simulation residency and Render
+residency/LOD are separate states. `not rendered != not simulated`.
+
+Load/keep policy, budgets and pressure handling require hysteresis/grace rather
+than immediate load/evict oscillation. Sparse metadata should reuse the
+hierarchical property architecture where appropriate rather than create a
+parallel metadata database.
+
+The full binding P01 rules for progressive per-pass materialization,
+data-driven load/keep/retention policy, independent budgets, pressure recovery
+and multi-owner residency constraints live in `docs/STREAMING_RESIDENCY.md`.
+
+Future fluids, villages, vegetation, astronomy, UI, audio and physics must plug
+into the same state/communication architecture instead of growing subsystem-
+specific world truths.
+
+## 15. Executable architecture gates and ownership
+
+Architecture is checked in complementary ways:
+
+- `tools/architecture_rules.json` + `tools/architecture_check.py`: deterministic
+  module/dependency/source-pattern firewall;
+- Graphify: architecture/dependency knowledge graph;
+- clang-tidy/static analysis: C++ semantic/AST gate;
+- compiler/tests: behavior and integration.
+
+Graphify is architecture tooling. In the OpenCode harness the PLANNER owns
+`graphify update .`. Builder and reviewer MUST NOT refresh the graph.
+
+`graphify update .` runs exactly once after each builder implementation pass and
+before its reviewer pass. The reviewer may query/read that refreshed graph but
+never updates it.
+
+`compile.sh` is the final independent acceptance gate and belongs to the
+REVIEWER. Builder and planner MUST NOT run it. Builders use targeted builds and
+tests while implementing.
+
+A green test does not overrule an architecture violation. Do not weaken a gate
+or architecture rule to make a patch pass. Change the patch.
+
+## 16. Hard forbidden shortcuts
+
+Stop and report rather than implementing any of these:
+
+- second world-state/mutation path;
+- second gameplay bus/event/network semantics;
+- direct Input/UI/Lua/Jolt -> ChunkManager mutation;
+- Timer worker -> Lua/WorldState/gameplay handler call;
+- persisted scheduler callbacks/Lua refs/function pointers;
+- raw `entt::entity` or engine-object handles as persistent public identity;
+- normal voxel -> one ECS/Jolt entity per block;
+- flattened huge-world float/double identity;
+- giant Section/Region/Sector containers for sparse metadata;
+- content-specific production C++ in generic engine modules;
+- privileged Default/vanilla-only engine features;
+- separate geometry engines for construction and blueprints;
+- Singleplayer path that bypasses embedded server authority;
+- changing tests/checkers/contracts merely to silence a valid failure.
+
+## 17. Architectural target
+
+The intended spine is:
+
+```text
+Producers: Input / Lua / UI / Timer / Jolt / Network
+                         |
+                CommunicationEnvelope
+                /       |       \
+            Command    Event   Query/Reply
+                |        |          |
+             handlers / systems / Lua
+                |
+             WorldState
+          /       |        \
+    Prototype   Sidecars   hot enTT projection
+                |
+          Persistence adapter
+
+Timer due       -> same router
+Jolt contact    -> same router
+Network receive -> same router
+```
+
+One world state. One communication contract. Multiple transports and
+projections. Content semantics stay out of the generic core.

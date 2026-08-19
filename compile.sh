@@ -286,7 +286,11 @@ if (( FINGERPRINT_ONLY )); then
 fi
 
 info "Architecture : checking module boundaries/include cycles..."
-if ! python3 tools/architecture_check.py --root "$PROJECT_ROOT"; then
+arch_args=(--root "$PROJECT_ROOT")
+if [[ -n "$JOBS" ]]; then
+    arch_args+=(--jobs "$JOBS")
+fi
+if ! python3 tools/architecture_check.py "${arch_args[@]}"; then
     fatal "Architecture check failed. Fix the dependency violation before compiling."
 fi
 

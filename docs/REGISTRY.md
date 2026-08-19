@@ -16,6 +16,7 @@ strings such as `core:stone`.
 | `emission` | integer | no | 0 | 0..15 |
 | `texture` | string | no | empty | image path relative to data root |
 | `color` | string/array | no | absent | fallback albedo sent directly to PBS when no texture is used |
+| `visualTintProperty` | string | no | empty | optional namespaced block property whose packed uint32 `0xRRGGBBAA` value is projected as a generic runtime tint |
 
 ### Visual fallback order
 
@@ -55,6 +56,46 @@ turning the block invisible or crashing the renderer.
 Channels must be integer 0..255. The old stone/dirt/grass/sand/water/gravel
 colour table has been removed from C++; only the deliberate last-resort
 magenta/black diagnostic pattern remains hardcoded.
+
+### Property-driven visual tint
+
+`visualTintProperty` connects rendering to registered logical state without
+teaching the renderer a content id. When the current block/prototype supports
+that property and WorldState resolves a non-zero `uint32`, the renderer decodes
+it as packed `0xRRGGBBAA`. Zero or an absent/unsupported property clears the
+override and leaves the block's normal material. The mesh carries the exact
+emitting voxel address for every face, so positive faces cannot accidentally
+read the neighbour's property.
+
+The field must be namespaced. Content cross-validation through
+`sidecars.json`/`prototypes.json` remains responsible for declaring a matching
+block-scoped uint32 property; generic C++ never assigns gameplay meaning to the
+property id or tint value.
+
+## gameplay.json
+
+`gameplay.json` is optional. When present, the strict generic loader consumes
+three arrays:
+
+- `scripts`: unique `{id, file}` entries; files are relative to the content
+  root and cannot escape it;
+- `handlers`: bus route metadata (`action`, `kind`, `receiver`, `context`,
+  optional `capability`, `payloadSchema`) plus Lua `script`, `function` and
+  `principal`;
+- `bootstraps`: content placements and one initial Lua invocation.
+
+A bootstrap placement declares `id`, stable block id, X/Z column,
+`surfaceOffset` and optional `replaceOccupied`. The loader resolves the final
+hierarchical address from the current worldgen surface but does not materialize
+anything. Execution waits until every target chunk has been normally generated
+and loaded, then uses the authoritative block remove/place bus commands.
+Replacement of an occupied generated cell is rejected unless the content
+explicitly sets `replaceOccupied: true`.
+
+An invocation names the script/function/principal and the normal envelope
+fields. `target` references a bootstrap placement; optional `payloadTarget`
+produces a typed `block_target` payload. Coordinates never travel through
+`replyTo`.
 
 ## Runtime BlockId table
 
@@ -145,10 +186,11 @@ sidecar types is legal.
 |---|---|---:|---:|---|---|
 | `id` | string | yes | - | namespaced sidecar id (`<namespace>:<name>`) |
 | `displayName` | string | yes | - | user-facing name |
+| `scope` | string | yes | `block` (C++ default) | target tier: `block` / `chunk` / `chunk_group` / `section` / `region` / `sector`; missing or unknown values are rejected (M01-B) |
 | `valueType` | string | no | `uint8` | `uint8` / `uint16` / `uint32` / `float` |
-| `defaultValue` | unsigned or number | no | 0 | typed default: unsigned for integer types, number for `float` |
-| `bitWidth` | unsigned | no | 0 | compact-encoding hint for integer types (1..32; 0 = full type width); metadata for storage/serialization (M09) only |
-| `storage` | string | no | `sparse` | `sparse` / `dense` |
+| `defaultValue` | unsigned or number | no | 0 | typed default: unsigned for integer types, finite number for `float` |
+| `bitWidth` | unsigned | no | 0 | compact-encoding hint for integer types (1..32; 0 = full type width); metadata for storage/serialization (persistence/current M05) only; never for `float` with explicit width |
+| `storage` | string | no | `sparse` | `sparse` / `dense` (dense only for `scope: block`) |
 | `persist` | boolean | no | true | persistence policy |
 | `serializationVersion` | unsigned | no | 1 | sidecar payload version (>= 1) |
 
@@ -166,21 +208,21 @@ rejected for `float` value types.
 per-chunk store: empty until the first `set()`/`setWithDefault()`, entries
 removed when written back to the object's removal default or via the explicit
 `remove()`, deterministic ascending local-index iteration for later
-serialization (M09). The prototype-aware `setWithDefault(localIndex, value,
+serialization/persistence. The prototype-aware `setWithDefault(localIndex, value,
 removalDefault)` decides removal against the default supplied *per call*, so
 two objects sharing one sidecar type never lose values to a chunk-wide baked
-default (write-order independence, M05 review round 2). `set()` keeps the
+default (write-order independence, historical WorldState review). `set()` keeps the
 classic "own default" semantics for the typed `OrientationSidecar` pilot.
 Writes report whether the stored state actually changed, so callers can skip
 dirty/change notifications for no-ops; writes outside the configured capacity
 (`Chunk::VOLUME` on the chunk path) are rejected, closing the future
-deserialization trap (M09). `BlockOrientation`
+deserialization trap. `BlockOrientation`
 (Up/Down/North/South/East/West; `bitWidth: 3` is a serialization/storage hint,
 the pilot's physical storage is a sparse map entry) is the pilot type; the
 chunk stores it (like every sidecar type) as a generic `PropertyValue` sidecar
 keyed by the data-driven id `core:orientation`
 (`world::CORE_ORIENTATION_SIDECAR`). No per-type members are added to Chunk
-(M04 review constraint).
+(generic Sidecar architecture constraint).
 
 Lifecycle invariant (issue #3, section 5): sidecar state may exist only for
 positions whose block actually needs it. Orientation writes to AIR blocks are
@@ -190,9 +232,9 @@ survives a block change. The lazy-destruction invariant holds for every type:
 once the last non-default entry returns to its default, the sidecar is dropped
 again.
 
-### Registry-driven resolver (M05)
+### Registry-driven resolver (implemented WorldState baseline)
 
-M05 delivers the registry-driven resolver as the unified world state
+The implemented WorldState baseline delivers the registry-driven resolver as the unified world state
 (`src/world/state/WorldState.h`): game code calls `has()`/`get()`/`set()` by
 *any* declared sidecar id — not just `core:orientation` — and never learns
 whether a value comes from a prototype default, a stored sidecar entry or
@@ -238,6 +280,53 @@ override was removed by a default write or a block replacement), and
 generic `core:orientation` sidecar — the shim and the unified world state
 read and write the exact same storage.
 
+### M01-B extension: Sidecar target scope (#20) — implemented
+
+**Implemented in commit `a848de9`.**
+
+`SidecarDef` carries an explicit target-scope contract so the same registry
+family describes both block-local state and hierarchy-object metadata.
+
+Required scopes (all supported):
+
+```text
+block
+chunk
+chunk_group
+section
+region
+sector
+```
+
+`sidecars.json` requires an explicit `scope` field (missing or unknown scope
+strings are a `RegistryError`; the C++ `SidecarDef{}` default Block exists
+for programmatic fixtures only). `core:orientation` is explicitly
+block-scoped.
+
+Validation is shared between the loader and the runtime:
+`world::validateSidecarDef` (namespaced id, valid enum members, bitWidth
+0/1..32 and integer types only, defaultValue fit, `scope != block` requires
+sparse storage, serializationVersion >= 1) runs at insertion AND at parse
+time; `world::valueFitsSidecarDef` enforces the typed range, bit-width and
+the finite-float rule at every `set()`. A definition the loader rejects can
+never be inserted programmatically either.
+
+Hierarchy-object identity is canonical address identity:
+
+```text
+Chunk       -> ChunkAddress
+ChunkGroup  -> GroupAddress
+Section     -> Sector + Region + Section
+Region      -> Sector + Region
+Sector      -> Sector
+```
+
+No global XYZ flattening and no fake block index for Chunk metadata. Runtime
+writes at any scope never materialize Chunk/ChunkGroup/Section/Region/Sector
+containers (sparse `HierarchySidecarStore` in world.state), and
+`WorldState::has/get/set` take the scope-aware `WorldStateTarget` and reject
+scope mismatches.
+
 ## prototypes.json
 
 Prototypes are the *logical* identity layer on top of physical block ids:
@@ -251,7 +340,7 @@ content root without prototypes is legal.
 | `displayName` | string | yes | - | user-facing name |
 | `blockId` | string | yes | - | linked physical block; must exist in `blocks.json` |
 | `capabilities` | array of string | no | empty | declared capabilities/slots (pure declarations until the signal/slot layer) |
-| `properties` | array of object | no | empty | supported logical properties + prototype defaults (M05) |
+| `properties` | array of object | no | empty | supported logical properties + prototype defaults (WorldState) |
 
 Each `properties` entry declares:
 
@@ -295,9 +384,9 @@ identity never depends on registry order. `world::prototypeForBlock( registry,
 blockId )` returns the owning prototype or `nullptr`; most blocks are pure
 scenery and are not referenced by any prototype. If sharing a block between
 prototypes ever becomes necessary, identity must move into per-block state
-(sidecars/ECS, M04/M05) - not into this bridge. `world::WorldObjectRef`
+(Sidecars/hot ECS projection) - not into this bridge. `world::WorldObjectRef`
 (position + prototype id) is the M03 foundation of the unified world-state API
-(M05).
+(WorldState).
 
 ## Block semantic tags
 

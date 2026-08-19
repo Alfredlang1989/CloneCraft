@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -33,6 +34,16 @@ namespace world
         std::uint8_t a = 255;
 
         friend bool operator==( const Rgba8 &, const Rgba8 & ) = default;
+        // Generic lexicographic ordering (channel order r,g,b,a). Enables
+        // Rgba8 as a std::map key (e.g. renderer tint variants) without any
+        // block-name special-casing.
+        friend bool operator<( const Rgba8 &l, const Rgba8 &r )
+        {
+            if( l.r != r.r ) return l.r < r.r;
+            if( l.g != r.g ) return l.g < r.g;
+            if( l.b != r.b ) return l.b < r.b;
+            return l.a < r.a;
+        }
     };
 
     enum class BlockRenderShape : std::uint8_t
@@ -74,6 +85,11 @@ namespace world
         // Texture paths are relative to the configured data directory.
         std::string texture;
         std::optional<Rgba8> color;
+        // Optional registered uint32 property whose packed value is
+        // interpreted as 0xRRGGBBAA by the generic render projection.
+        // Zero means no per-instance tint override. The property id and all
+        // values remain content data; the renderer knows no gameplay states.
+        std::string visualTintProperty;
 
         // Physically based material properties. These are deliberately kept
         // renderer-agnostic in the registry so mods/data files own the look.
@@ -224,6 +240,23 @@ namespace world
         Float
     };
 
+    /**
+     * Target scope of a registered sidecar/property type (M01-B, issue #20).
+     * The value is the logical address tier the property may be stored at;
+     * the canonical hierarchy is Sector -> Region -> Section -> ChunkGroup ->
+     * Chunk -> Block. Section/Region/Sector are logical address tiers and are
+     * never materialized as containers by the sidecar layer.
+     */
+    enum class SidecarScope : std::uint8_t
+    {
+        Block,
+        Chunk,
+        ChunkGroup,
+        Section,
+        Region,
+        Sector
+    };
+
     /** Storage strategy of a sidecar type (issue #3, section 5.1). */
     enum class SidecarStorageStrategy : std::uint8_t
     {
@@ -243,12 +276,20 @@ namespace world
      * The runtime pilot (M04) is hardwired to the orientation sidecar; the
      * registry-driven resolver that stores values for *any* declared type
      * arrives with M05. No per-field unique_ptr members are added to Chunk.
+     *
+     * `scope` (M01-B, #20) is the mandatory target tier. Data files must
+     * declare it explicitly - the loader rejects sidecar types without a
+     * scope key and any unknown scope string (RegistryError). The C++ member
+     * default Block exists only for programmatic SidecarDef{} fixtures and
+     * is never used to guess a data file's scope. core:orientation is
+     * explicitly block-scoped.
      */
     struct SidecarDef
     {
         std::string id;                    // stable namespaced id, e.g. "core:orientation"
         std::string displayName;
         SidecarValueType valueType = SidecarValueType::Uint8;
+        SidecarScope scope = SidecarScope::Block; // M01-B target tier
         // Typed default: integer default for uint8/16/32, float default for
         // the Float value type. Validated per valueType when parsing.
         std::variant<std::uint32_t, float> defaultValue = 0u;
@@ -258,6 +299,145 @@ namespace world
         bool persist = true;               // persistence policy
         std::uint32_t serializationVersion = 1;
     };
+    /**
+     * Whether a PropertyValue fits a sidecar type's declared valueType and
+     * compact bitWidth. Shared single source of truth used both at load time
+     * (prototype properties are validated against sidecars.json, ADR-027) and
+     * at runtime (WorldState::set gate), so a value that the registry accepts
+     * can never be rejected by the resolver and vice versa.
+     */
+    inline bool valueFitsSidecarDef( const SidecarDef &def, const PropertyValue &value )
+    {
+        if( def.valueType == SidecarValueType::Float )
+        {
+            // Round 6: a valid sidecar float is FINITE. NaN/Infinity would
+            // poison the equality-based sparse semantics (NaN != NaN: every
+            // write would look like a change, the default-removal threshold
+            // could never match) and cannot be represented in regular JSON
+            // anyway.
+            return std::holds_alternative<float>( value ) &&
+                   std::isfinite( std::get<float>( value ) );
+        }
+        if( !std::holds_alternative<std::uint32_t>( value ) )
+            return false;
+        const std::uint64_t v = std::get<std::uint32_t>( value );
+        switch( def.valueType )
+        {
+            case SidecarValueType::Uint8:
+                if( v > 0xFFu ) return false;
+                break;
+            case SidecarValueType::Uint16:
+                if( v > 0xFFFFu ) return false;
+                break;
+            case SidecarValueType::Uint32:
+                break;
+            case SidecarValueType::Float:
+                return false; // handled above
+            default:
+                return false; // unknown enum value: never fits (round 5)
+        }
+        if( def.bitWidth != 0u )
+        {
+            if( def.bitWidth >= 32u )
+                return true; // full uint32 range
+            if( v >= ( static_cast<std::uint64_t>( 1u ) << def.bitWidth ) )
+                return false; // value does not fit the declared compact width
+        }
+        return true;
+    }
+
+    /**
+     * Content ids are stable contracts and must be <namespace>:<name>.
+     * Single definition shared by loader and runtime (M01-B review round 4).
+     */
+    inline bool isNamespacedId( const std::string &id )
+    {
+        const std::size_t separator = id.find( ':' );
+        if( separator == std::string::npos )
+            return false;
+        if( separator == 0u || separator + 1u >= id.size() )
+            return false;
+        return id.find( ':', separator + 1u ) == std::string::npos;
+    }
+
+    /**
+     * Structural invariants of a registered sidecar type (M01-B review round
+     * 4/5): ONE shared validation source used by the JSON loader AND the
+     * runtime (programmatic SidecarDef{} constructions). A definition that
+     * the loader rejects can therefore never be inserted or stored by the
+     * runtime either.
+     *
+     * Rules:
+     *  - enum members are exactly the declared alternatives - a programmatic
+     *    static_cast to an out-of-range SidecarScope/SidecarValueType/
+     *    SidecarStorageStrategy is invalid (round 5);
+     *  - namespaced id;
+     *  - bitWidth 0 (full type width) or in 1..32 - the loader and the
+     *    runtime share this exact semantic;
+     *  - bitWidth only for integer value types (never float);
+     *  - defaultValue fits the declared valueType/bitWidth
+     *    (valueFitsSidecarDef);
+     *  - hierarchy scopes (chunk .. sector) are sparse by contract: dense
+     *    storage is rejected above the block tier (block-dense stays older
+     *    architecture);
+     *  - serializationVersion >= 1.
+     */
+    inline void validateSidecarDef( const SidecarDef &def, const std::string &where )
+    {
+        switch( def.scope )
+        {
+            case SidecarScope::Block:
+            case SidecarScope::Chunk:
+            case SidecarScope::ChunkGroup:
+            case SidecarScope::Section:
+            case SidecarScope::Region:
+            case SidecarScope::Sector:
+                break;
+            default:
+                throw RegistryError( where + ": sidecar '" + def.id +
+                                     "' has an invalid SidecarScope" );
+        }
+        switch( def.valueType )
+        {
+            case SidecarValueType::Uint8:
+            case SidecarValueType::Uint16:
+            case SidecarValueType::Uint32:
+            case SidecarValueType::Float:
+                break;
+            default:
+                throw RegistryError( where + ": sidecar '" + def.id +
+                                     "' has an invalid SidecarValueType" );
+        }
+        switch( def.storage )
+        {
+            case SidecarStorageStrategy::Sparse:
+            case SidecarStorageStrategy::Dense:
+                break;
+            default:
+                throw RegistryError( where + ": sidecar '" + def.id +
+                                     "' has an invalid SidecarStorageStrategy" );
+        }
+        if( !isNamespacedId( def.id ) )
+            throw RegistryError( where + ": sidecar id '" + def.id +
+                                 "' must be namespaced as <namespace>:<name>" );
+        if( def.bitWidth > 32u )
+            throw RegistryError( where + ": sidecar '" + def.id +
+                                 "' bitWidth " + std::to_string( def.bitWidth ) +
+                                 " must be in 1..32 (0 = full type width)" );
+        if( def.valueType == SidecarValueType::Float && def.bitWidth != 0u )
+            throw RegistryError( where + ": sidecar '" + def.id +
+                                 "' bitWidth only applies to integer value types" );
+        if( !valueFitsSidecarDef( def, def.defaultValue ) )
+            throw RegistryError( where + ": sidecar '" + def.id +
+                                 "' defaultValue does not fit the declared valueType/bitWidth" );
+        if( def.scope != SidecarScope::Block && def.storage == SidecarStorageStrategy::Dense )
+            throw RegistryError( where + ": sidecar '" + def.id +
+                                 "' 'storage' 'dense' is not supported for sidecar scopes "
+                                 "above 'block' (hierarchy sidecars are sparse)" );
+        if( def.serializationVersion == 0u )
+            throw RegistryError( where + ": sidecar '" + def.id +
+                                 "' serializationVersion must be >= 1" );
+    }
 
     /**
      * Generic id-keyed registry with insertion order and strict
@@ -338,41 +518,17 @@ namespace world
 
     using SidecarRegistry = Registry<SidecarDef>;
 
-    /**
-     * Whether a PropertyValue fits a sidecar type's declared valueType and
-     * compact bitWidth. Shared single source of truth used both at load time
-     * (prototype properties are validated against sidecars.json, ADR-027) and
-     * at runtime (WorldState::set gate), so a value that the registry accepts
-     * can never be rejected by the resolver and vice versa.
-     */
-    inline bool valueFitsSidecarDef( const SidecarDef &def, const PropertyValue &value )
+    /** Runtime gate (M01-B review round 4): every SidecarDef inserted - by
+     *  the JSON loader or programmatically - passes the same structural
+     *  validation. A definition the loader would reject can never enter the
+     *  registry via code paths either, so WorldState can never store a
+     *  definition that violates the sparse/dense or shape rules. */
+    template <>
+    inline void Registry<SidecarDef>::insert( const SidecarDef &entry )
     {
-        if( def.valueType == SidecarValueType::Float )
-            return std::holds_alternative<float>( value );
-        if( !std::holds_alternative<std::uint32_t>( value ) )
-            return false;
-        const std::uint64_t v = std::get<std::uint32_t>( value );
-        switch( def.valueType )
-        {
-            case SidecarValueType::Uint8:
-                if( v > 0xFFu ) return false;
-                break;
-            case SidecarValueType::Uint16:
-                if( v > 0xFFFFu ) return false;
-                break;
-            case SidecarValueType::Uint32:
-                break;
-            case SidecarValueType::Float:
-                return false; // handled above
-        }
-        if( def.bitWidth != 0u )
-        {
-            if( def.bitWidth >= 32u )
-                return true; // full uint32 range
-            if( v >= ( static_cast<std::uint64_t>( 1u ) << def.bitWidth ) )
-                return false; // value does not fit the declared compact width
-        }
-        return true;
+        validateSidecarDef( entry, "sidecar '" + entry.id + "'" );
+        if( !mEntries.emplace( entry.id, entry ).second )
+            throw RegistryError( "duplicate id '" + entry.id + "'" );
+        mOrder.push_back( entry.id );
     }
-
 } // namespace world

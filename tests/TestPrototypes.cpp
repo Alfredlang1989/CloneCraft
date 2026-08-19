@@ -79,7 +79,7 @@ TEST_CASE( prototypes_default_mod_loads_pilot_cactus )
     const bool loaded = RegistryLoader::loadPrototypes( dataDir, blocks, prototypes );
 
     CHECK( loaded );
-    CHECK_EQ( prototypes.size(), std::size_t{ 1 } );
+    CHECK_EQ( prototypes.size(), std::size_t{ 3 } );
 
     const PrototypeDef *cactus = prototypes.find( "default:cactus" );
     CHECK( cactus != nullptr );
@@ -156,6 +156,146 @@ TEST_CASE( prototypes_parse_properties_and_reject_invalid_declarations )
           "properties": { "core:orientation": 0 } } ]})", blocks ); } ) );
 }
 
+TEST_CASE( prototypes_property_defaults_are_range_checked_before_narrowing )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+    const SidecarRegistry sidecars = loadRealSidecars(); // core:orientation: uint8, bitWidth 3
+
+    // M01-A: the JSON int64 is validated *before* the uint32 conversion.
+    // -1 must not wrap to 4294967295 and 4294967296 must not truncate to 0.
+    // This holds on the gated path (sidecar registry supplied)...
+    PrototypeRegistry gated;
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": -1 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, gated, &sidecars );
+    } ) );
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": 4294967296 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, gated, &sidecars );
+    } ) );
+    // ...and on the legacy path without the load-time sidecar registry: a
+    // wrapped default would silently corrupt the registry.
+    PrototypeRegistry legacy;
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": -1 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, legacy );
+    } ) );
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": 4294967296 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, legacy );
+    } ) );
+    // The uint32 upper boundary itself remains a *valid* legacy default:
+    // only the value above it is out of range.
+    const PrototypeRegistry boundary = parse( R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "core:orientation", "defaultValue": 4294967295 } ] } ]})",
+                                              blocks );
+    const PrototypeDef *cactus = boundary.find( "default:cactus" );
+    CHECK( cactus != nullptr );
+    if( cactus )
+    {
+        CHECK_EQ( cactus->properties.size(), std::size_t{ 1 } );
+        if( cactus->properties.size() == 1u )
+        {
+            CHECK( std::holds_alternative<std::uint32_t>( cactus->properties[0].defaultValue ) );
+            CHECK_EQ( std::get<std::uint32_t>( cactus->properties[0].defaultValue ),
+                      0xFFFFFFFFu );
+        }
+    }
+
+    // Reviewer round 2: UINT64_MAX is unsigned-integer storage (and
+    // is_number_integer() covers it), so it must be rejected as the raw
+    // uint64 value - never wrapped through get<int64_t>() into -1, which
+    // would then pass the negative/range checks.
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation",
+                                "defaultValue": 18446744073709551615 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, legacy );
+    } ) );
+}
+
+TEST_CASE( prototypes_property_default_bitwidth_overflow_is_rejected )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+    const SidecarRegistry sidecars = loadRealSidecars(); // core:orientation: uint8, bitWidth 3
+
+    // 8 = 2^3 is the first value outside the registered 3-bit encoding. The
+    // old parser truncated *before* validation, so an out-of-range source
+    // value could arrive narrowed into a valid-looking small default.
+    PrototypeRegistry out;
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": 8 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, out, &sidecars );
+    } ) );
+}
+
+TEST_CASE( prototypes_float_default_has_one_explicit_numeric_rule )
+{
+    const BlockRegistry blocks = loadRealBlocks();
+
+    SidecarRegistry sidecars;
+    SidecarDef level;
+    level.id = "test:level";
+    level.displayName = "Level";
+    level.valueType = SidecarValueType::Float;
+    level.defaultValue = 0.0f;
+    sidecars.insert( level );
+
+    // M01-A float numeric rule: a float sidecar type accepts any JSON number.
+    // Integer syntax denotes the exact integral value, so `0` and `0.0` are
+    // the same default (mirrors the sidecars.json float rule).
+    const std::string jsonInt = R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "test:level", "defaultValue": 0 } ] } ]})";
+    const std::string jsonFloat = R"({"prototypes":[
+        { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+          "properties": [ { "id": "test:level", "defaultValue": 0.0 } ] } ]})";
+
+    PrototypeRegistry integerSyntax;
+    RegistryLoader::parsePrototypes( json::parse( jsonInt ), "test-prototypes.json",
+                                     blocks, integerSyntax, &sidecars );
+    PrototypeRegistry floatSyntax;
+    RegistryLoader::parsePrototypes( json::parse( jsonFloat ), "test-prototypes.json",
+                                     blocks, floatSyntax, &sidecars );
+
+    for( const PrototypeRegistry &registry : { integerSyntax, floatSyntax } )
+    {
+        const PrototypeDef *cactus = registry.find( "default:cactus" );
+        CHECK( cactus != nullptr );
+        if( cactus )
+        {
+            CHECK_EQ( cactus->properties.size(), std::size_t{ 1 } );
+            if( cactus->properties.size() == 1u )
+            {
+                CHECK( std::holds_alternative<float>( cactus->properties[0].defaultValue ) );
+                CHECK_EQ( std::get<float>( cactus->properties[0].defaultValue ), 0.0f );
+            }
+        }
+    }
+
+    // An integer sidecar type takes integer syntax only: `0.5` on
+    // core:orientation (uint8/3-bit) is rejected with a clear message.
+    PrototypeRegistry out;
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "core:orientation", "defaultValue": 0.5 } ] } ]})" ),
+                                         "test-prototypes.json", blocks, out, &sidecars );
+    } ) );
+}
+
 TEST_CASE( prototypes_reject_property_without_registered_sidecar_type )
 {
     const BlockRegistry blocks = loadRealBlocks();
@@ -170,6 +310,23 @@ TEST_CASE( prototypes_reject_property_without_registered_sidecar_type )
             { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
               "properties": [ { "id": "mod:missing", "defaultValue": 7 } ] } ]})" ),
                                          "test-prototypes.json", blocks, out, &sidecars );
+    } ) );
+
+    // M01-B (#20): a prototype property is per-block state and must reference
+    // a BLOCK-scoped sidecar type. A declaration pointing at a higher-scope
+    // type is rejected by the same load gate.
+    SidecarRegistry scoped = loadRealSidecars();
+    SidecarDef regionScoped;
+    regionScoped.id = "mod:regional";
+    regionScoped.displayName = "Regional";
+    regionScoped.valueType = SidecarValueType::Uint32;
+    regionScoped.scope = SidecarScope::Region;
+    scoped.insert( regionScoped );
+    CHECK( rejected( [&] {
+        RegistryLoader::parsePrototypes( json::parse( R"({"prototypes":[
+            { "id": "default:cactus", "displayName": "Cactus", "blockId": "core:cactus",
+              "properties": [ { "id": "mod:regional", "defaultValue": 7 } ] } ] } )" ),
+                                         "test-prototypes.json", blocks, out, &scoped );
     } ) );
 
     // Without the cross-validation gate the same document still parses (the
@@ -218,11 +375,21 @@ TEST_CASE( prototypes_default_mod_validates_against_default_sidecars )
     const bool loaded = RegistryLoader::loadPrototypes( dataDir, blocks, prototypes, &sidecars );
 
     CHECK( loaded );
-    CHECK_EQ( prototypes.size(), std::size_t{ 1 } );
+    CHECK_EQ( prototypes.size(), std::size_t{ 3 } );
     const PrototypeDef *cactus = prototypes.find( "default:cactus" );
     CHECK( cactus != nullptr );
     if( cactus )
         CHECK_EQ( cactus->properties.size(), std::size_t{ 1 } );
+    // M03 Round 4: the two-block bus proof prototypes must also pass the
+    // cross-validation gate (each declares both block-scoped sidecars).
+    const PrototypeDef *blockA = prototypes.find( "test:block_a" );
+    CHECK( blockA != nullptr );
+    if( blockA )
+        CHECK_EQ( blockA->properties.size(), std::size_t{ 2 } );
+    const PrototypeDef *blockB = prototypes.find( "test:block_b" );
+    CHECK( blockB != nullptr );
+    if( blockB )
+        CHECK_EQ( blockB->properties.size(), std::size_t{ 2 } );
 }
 
 TEST_CASE( prototypes_block_bridge_resolves_pilot_block )

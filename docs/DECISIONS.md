@@ -1,8 +1,220 @@
-# Architecture decisions
+# Architecture decisions and rationale
 
-This file records decisions that future agents must not silently reverse.
-The uploaded working tree is currently dirty beyond the last clean milestone;
-read `INDEX.plan` and `docs/STATUS.md` before changing anything.
+This file is supporting rationale, not the current architecture authority.
+`docs/ARCHITECTURE.md` is the non-negotiable contract and
+`docs/ROADMAP.md` owns current milestone numbering/status. Historical milestone
+labels below are preserved only to explain when a decision originated; they must
+not be used to infer current roadmap order. Read this file only when a selected
+milestone or concrete finding needs the rationale.
+
+## ADR-031 - CommunicationRuntime owns the messaging semantics (M03 Round 1)
+
+**Decision:** `world::communication::CommunicationRuntime` is the single
+production communication bus. It owns the unique message-id sequence, the
+Signal/Slot/Action registries, the typed payload schemas, per-slot output
+contracts, the bounded A/B queues, the delivery routes and the capability
+authorization grants. `CommunicationRouter` becomes the execution/routing
+mechanism only; its route map is the internal binding table. The runtime
+exposes no raw router or raw `MessageIdSource` access - ids are minted
+exclusively through the guarded `nextMessageId()` and the controlled
+`makeReply(cause, result)`.
+
+**Why:** M02 proved the envelope+router contract; M03 generalizes it to
+Event/Query/Reply, multiple producers and later a timer worker. Without a
+single owner, several systems would drift back into parallel buses
+("one communication contract"). The reviewer chain (Senior Review, M03
+Round 1) rejected raw-id and raw-router bypasses: a trace sink could consume
+ids, steal outputs or execute handlers outside the controlled path.
+
+**Consequences:**
+
+- Command/Event/Query/Reply use the same `CommunicationEnvelope`; no second
+  event object is ever introduced;
+- `SignalRegistry` (signal -> payload schema), `SlotRegistry` (receiver/
+  context/capability -> expected schema + bound action + declared
+  `OutputContract`) and `ActionRegistry` (namespaced id -> executable) are
+  real registries; registration is all-or-nothing (atomic);
+- `OutputContract` (maxOutputs, output kind, output payload schema,
+  correlation requirement) is validated on BOTH delivery routes; the async
+  path pre-flights capacity BEFORE the handler runs (peek-based), rejects
+  permanently undeliverable messages at `submit()` and never drops silently;
+- every message is delivered on exactly one route: synchronous `dispatch()`
+  returns outputs in the `DispatchResult` (A/B untouched); the async
+  `submit()/pump*()/nextOutput()` path delivers exclusively through queue B;
+- the async pump is non-reentrant (`AsyncPumpGuard`) and the runtime trace is
+  a read-only observer (exceptions contained; a sink cannot consume outputs,
+  inject messages, dispatch, pump, mint ids or mutate runtime configuration);
+- capability strings in envelopes are ROUTING requests; authorization comes
+  only from registered grants (`grantCapability`) - content-driven capability
+  resolution from receiver/prototype/slot properties is deferred to a later
+  M03 round;
+- the Round-2 timer worker must use a thread-safe handoff to the owner thread
+  and only `submit()` due envelopes onto queue A - it never calls
+  `submit()/dispatch()/pump*()`, Lua, WorldState or the renderer from its own
+  thread.
+
+## ADR-032 - The delayed-message scheduler stores only transportable envelopes (M03 Round 2)
+
+**Decision:** `world::DelayedMessageScheduler` is a timer, not a bus and not a
+gameplay runtime. Its stored unit is exactly
+`due_time + monotonic sequence + CommunicationEnvelope` - never
+`std::function`, callback pointers, Lua refs, WorldState refs or handler refs.
+It reinterprets no message field. Time is abstracted behind `SchedulerClock`
+(`now`/`waitUntil`/`interrupt`): production uses `SteadySchedulerClock`
+(`std::chrono::steady_clock`), tests inject a deterministic fake clock.
+Delivery is bounded and head-of-line, errors are loud, and introspection
+reads scheduler-owned state - never the live `std::thread` object.
+
+**Why:** A timer must not become a second event system. The M02/M03 review
+chain rejected function-pointer/callback timers because a stored `luaL_ref`
+or `std::function` cannot be transported (M06 client/server), persisted
+(historical WorldState work) or replayed deterministically; the envelope is the permanent
+transportable unit. `steady_clock` makes a running timer immune to OS time
+corrections. A bounded, head-of-line handoff keeps the owner-thread A-queue
+authority (ADR-031) without an unbounded retry structure. Touching
+`std::thread` from introspection would race `join()`.
+
+**Consequences:**
+
+- the worker thread NEVER calls the runtime, Lua, WorldState or the renderer
+  and never runs gameplay handlers; it only pops due entries into a bounded
+  thread-safe handoff. The owner/game thread drains via
+  `drainDueTo(runtime) -> CommunicationRuntime::submit()` onto the existing
+  inbound A queue;
+- interrupts are pending-safe: one armed immediately before `waitUntil()`
+  still aborts that wait (consumable pending flag, no busy waiting), so a
+  new earlier schedule can never be lost to a freshly entered wait;
+- `(due_time, sequence)` ordering: scheduling calls are linearized under the
+  scheduler mutex and each receives a monotonic sequence, so same-due-time
+  serial producers keep exact call order; genuinely concurrent producers
+  have no cross-run guaranteed relative order (their order is the mutex
+  linearization order, which is not reproducible across runs);
+- head-of-line backpressure: a front that cannot be submitted stays in the
+  bounded handoff and the drain stops immediately - no loss, no message-id
+  re-issue, no unbounded retry queue, no overtake; a permanent submit
+  rejection (broken contract) removes the poisoned front, preserves all
+  successors in order and throws a defined `CommunicationError`;
+- loud errors: sequence overflow throws (never wraps); `scheduleAt`/
+  `scheduleAfter` after `shutdown()` throw (silent loss is forbidden);
+  `handoffCapacity == 0` is rejected by the constructor; shutdown stops and
+  joins the worker (no detached zombie);
+- introspection (`running()`, `workerThreadId()`) reads scheduler-owned state
+  under the scheduler mutex and never touches the live `std::thread` object:
+  `running()` derives from the scheduler's own stop flag (the worker exits
+  solely through it) and `workerThreadId()` reads a cached id captured at
+  worker start - a parallel `shutdown()`/`join()` can therefore never race a
+  read;
+- Round 3 gameplay Lua and the Round 4 two-block proof still run through the
+  SAME `CommunicationRuntime`/envelope contract; the scheduler adds no
+  gameplay semantics.
+
+## ADR-033 - Gameplay Lua is one owner-thread runtime with per-script isolation and an uncatchable instruction budget (M03 Round 3)
+
+**Status:** implemented as `world::scripting::GameplayLuaRuntime`
+(module `world.scripting`), fresh closure verified 2026-08-19 and independent
+reviewer PASS confirmed by the project owner; not yet committed. The reviewer
+transcript is not bundled in this Nightrun archive, so no synthetic review tag
+is recorded.
+
+**Decision:** Gameplay content scripts run in ONE Lua 5.4 state on the
+owner/Game thread only. Every script gets its own `_ENV` and its own shallow
+copies of the sandbox namespace tables (`bus/world/math/string/table/utf8`);
+the real `_G`, shared type-metatables and raw `os/io/debug/package/require/
+dofile/loadfile/load/coroutine` (plus `rawset`, `rawget`, `getmetatable`,
+`math.random/randomseed`) are unreachable. Scripts communicate exclusively
+through the existing `CommunicationRuntime` and `DelayedMessageScheduler`;
+WorldState is read-only (`world.get_block`). Outbound `sender` is always the
+host `ScriptBinding` principal, message ids always come from the runtime, and
+`message_id`/`correlation_id` reach Lua as opaque uint64 decimal strings. The
+instruction budget uses a Lua count hook installed exactly once per state;
+a budget abort is an UNCATCHABLE host abort (private sentinel +
+`InvocationContext.budgetExceeded`; budget-aware `pcall`/`xpcall` re-raise it;
+a handler-local abort cannot recursively re-enter that handler or expose the
+sentinel, while ordinary handler failures retain stock Lua 5.4 recursion/
+LUA_ERRERR). Wire/contract
+tables must be plain data tables (metatables rejected) with strict boolean/
+unknown-field validation.
+
+**Why:** Gameplay scripts must not freeze the game thread (budget), must not
+spoof bus identity (host principal + runtime ids), must not mutate the world
+or bypass the one communication contract, and must not leak state between
+mods/scripts (isolation). Stock `pcall`/`xpcall` would turn a budget abort
+into a swallowable error, and a script-provided `errfunc` would leak the
+private sentinel to Lua - hence the budget-aware wrappers with real Lua 5.4
+result semantics. Plain-data contract tables keep the strict codec free of
+metamethod magic. Opaque decimal strings keep full uint64 message/correlation
+identity without Lua's signed-int64 wrap.
+
+**Consequences:**
+
+- the GameplayLuaRuntime is owner-thread enforced on EVERY public API; Lua is
+  never called from other threads and never under a mutex;
+- per-script namespace copies: a script sabotaging `bus.send`/`math.abs`/
+  `table.insert`/`string.format`/`world.get_block` can only hurt itself;
+- the budget hook is installed once at construction - nested queries cannot
+  re-arm the countdown; the budget applies per invocation (top of the
+  invocation-context stack), with recovery after any budget error;
+- budget aborts are NOT normal Lua errors: a body abort never executes the
+  error handler; a handler-local abort executes it once only and cannot be
+  recursively delivered back to it; the sentinel is never handed to or
+  storable by Lua, and the abort propagates until the outer host `invoke()` throws
+  `GameplayLuaBudgetError`;
+- sandbox `pcall`/`xpcall` behave like stock Lua 5.4 for normal errors and
+  results (including omitted/non-callable protected targets, function args,
+  error-handler results, and no handler leak into results);
+- read-only envelope snapshots reject every write (proxy with protected
+  metatable); `rawset`/`rawget` are absent from the sandbox, so the proxy
+  cannot be bypassed;
+- `loadScript` rejects duplicate script ids (no hot reload in Round 3);
+- Round 4 (visible two-block proof) and later gameplay run through the SAME
+  runtime/bus; the runtime adds no gameplay semantics itself.
+
+## ADR-034 - The two-block bus proof is data-driven content over the one communication contract (M03 Round 4)
+
+**Status:** repair candidate implemented 2026-08-19; targeted M03 automated
+suites are green. Independent `compile.sh` review and the manual visible Alfred
+gate remain pending and are not claimed by the builder.
+
+**Decision:** The mandatory visible two-block proof is expressed as data-driven
+content plus generic integration, never as block-name special-casing:
+
+- `MODS/Default/gameplay.json` names script files, bus handlers, normally
+  materialized placements and the initial invocation. The generic
+  `GameplayContentRuntime` loads that manifest without knowing A/B actions,
+  content ids or colours;
+- the generic registered command `core:property.set` carries a namespaced
+  property id plus typed value and mutates only through WorldState;
+  `test:visual_tint` stores packed `0xRRGGBBAA` and `test:callback_count` stores
+  the proof counter, with all proof values and behavior in shipped Lua/content;
+- B's exact address travels in the typed `BlockTargetPayload`. `replyTo` is
+  reserved for logical reply correlation and is never a coordinate carrier;
+- bootstrap placement waits until streaming/worldgen materializes every target
+  chunk. Explicitly declared occupied-cell replacement uses the ordinary
+  `core:block.remove` then `core:block.place` bus commands; it never creates an
+  empty chunk or bypasses WorldState;
+- `BlockDef::visualTintProperty` is an optional generic registry projection.
+  Mesh vertices record the exact voxel that emitted each quad, so tint lookup
+  is correct on negative and positive X/Y/Z faces rather than guessing with
+  `floor(firstVertex)`.
+
+**Why:** The proof must demonstrate the one communication contract (envelope /
+router / scheduler / Lua runtime / WorldState) end-to-end, not a bespoke
+two-block hack. Data-driven content keeps the renderer and the bus generic and
+reusable; Sidecars are the authoritative visual/callback state; the scheduler
+still transports only plain `CommunicationEnvelope`s; A reaches B only through
+one routed bus Event.
+
+**Consequences:**
+
+- no second event object, no parallel bus, no `event_id -> vector<callbacks>`;
+- no direct A->B C++ call; Lua mutates only via `bus.send(Command)` ->
+  WorldState; `world.get_block` stays read-only;
+- the renderer tint is keyed by the canonical emitting block address and its
+  registered property value, never by a block name;
+- automated acceptance loads the shipped manifest and Lua files instead of
+  maintaining a second embedded copy;
+- the manual visible gate is separate Alfred acceptance on the graphical target
+  and is not faked by headless tests.
 
 ## ADR-001 - SDL3 owns the native application window
 SDL3 creates and owns the main window and polls the event queue. OgreNext is
@@ -270,7 +482,7 @@ v16 local noise while moving large-address work out of the voxel hot path.
 - naive `worldX % period` before OpenSimplex is forbidden because the real
   periodicity lives in OpenSimplex's transformed lattice, not raw XYZ.
 
-## ADR-027 - Unified world state owns all gameplay block mutation (M05)
+## ADR-027 - Unified world state owns all gameplay block mutation (historical WorldState work)
 
 **Decision:** `world::WorldState` (src/world/state/, module `world.state`) is
 the single game-facing entry point for block and block-property state.
@@ -293,7 +505,7 @@ instead of scattered direct ChunkManager writes. The prototype gate makes
 the API a *logical object state API* (an object owns the properties its
 prototype declares) rather than a generic sidecar write-anywhere API: plain
 scenery blocks, AIR and unloaded chunks own no properties. M06 actions and
-M08 events depend on that. The M04 pilot showed direct chunk orientation
+later events depend on that. The historical orientation pilot showed direct chunk orientation
 writes scale poorly once multiple sidecar types exist.
 
 **Consequences:**
@@ -301,7 +513,7 @@ writes scale poorly once multiple sidecar types exist.
 - Chunk stores all sidecar types generically
   (`std::map<std::string, std::unique_ptr<Sidecar<PropertyValue>>>`, keyed by
   the data-driven type id; std::map keeps serialization order deterministic
-  for M09). No per-field sidecar members are ever added to Chunk.
+  for persistence (current M05)). No per-field sidecar members are ever added to Chunk.
 - `PropertyValue = std::variant<std::uint32_t, float>` mirrors
   `SidecarDef::defaultValue`; the resolver enforces the value type *and
   bitWidth* declared in `sidecars.json`, so a sidecar never mixes alternatives
@@ -317,7 +529,7 @@ writes scale poorly once multiple sidecar types exist.
 - ChunkManager `setBlock` returns whether the block actually changed; no-op
   writes are never dirty, never notify and never reach the sink. Boundary
   block *and* property changes invalidate the adjacent chunks
-  (mesh/neighbour invalidation, M05).
+  (mesh/neighbour invalidation).
 - `PropertyDelta` records carry the final property value (nullopt = the
   override no longer exists: a default write or a block replacement removed
   it). Sidecars with `persist: false` never reach the sink.
@@ -328,10 +540,10 @@ writes scale poorly once multiple sidecar types exist.
   to mutate ChunkManager directly).
 - Worldgen base load (`assignBlocks` via the streaming manager) stays outside
   the unified mutation path — it is content loading, not gameplay mutation.
-- The M04 review constraint stands: adding `mTemperature`/`mDamage`/`mPower`
+- The generic Sidecar constraint stands: adding `mTemperature`/`mDamage`/`mPower`
   as more `unique_ptr` members to Chunk is forbidden.
 
-## ADR-028 - Prototype-aware property removal is write-order independent (M05 review round 2)
+## ADR-028 - Prototype-aware property removal is write-order independent (historical WorldState review)
 
 **Decision:** A sidecar's "writing the default removes the override" decision is made
 against the *object's own logical default* supplied per write (`Sidecar::setWithDefault`),
@@ -341,7 +553,7 @@ sidecar cannot change how another object's values behave. `Chunk::setBlock` clea
 replaced block's sidecar entries with an explicit `remove()`, never by writing a
 (possibly wrong) stored default.
 
-**Why:** Prototype-specific defaults are the whole point of the M05 prototype-aware
+**Why:** Prototype-specific defaults are the point of the prototype-aware
 resolver (a property value is meaningful relative to the object that owns it). If the
 sidecar baked in the first writer's default, a second prototype writing that same
 numeric value would see it "equal to the default" and drop a real override. That is a
@@ -389,3 +601,42 @@ store corrupt voxel data, and an AIR no-op on an unloaded position created empty
 - Regression tests: prototypes gate rejection + default-mod validation, has()/get()/set()
   consistency for a declared-but-unresolvable property, setBlock invalid-id rejection,
   and AIR no-op residency.
+
+## ADR-030 - Hierarchical Sidecars are sparse properties on canonical world addresses
+
+**Status:** implemented in M01-B, commit `a848de9` (#20). Implementation notes
+below document the decisions taken during delivery.
+
+**Decision:** The existing block-local Sidecar family is extended to registered
+properties targeting Block, Chunk, ChunkGroup, Section, Region and Sector.
+Chunk-level metadata is keyed by `ChunkAddress`, not by a reserved local block
+slot. ChunkGroup/Section/Region/Sector metadata is keyed by the exact canonical
+hierarchical identity already owned by the coordinate system.
+
+Section, Region and Sector remain logical address tiers. Adding metadata must
+not materialize Section/Region/Sector containers or flatten identity into a
+global integer/double.
+
+A registered Sidecar definition includes an allowed target scope (`scope` is a
+mandatory field of sidecars.json; missing/unknown values are a
+`RegistryError`). The same typed value, default-removal, sparse/lazy, `persist`,
+bit-width and serialization-version rules apply across scopes.
+
+**Why:** World-scale systems need sparse metadata such as residency constraints
+and mod-owned regional facts without proliferating subsystem-specific metadata
+databases. The logical coordinate space is too large to preallocate hierarchy
+objects, and a fake block index for Chunk metadata would make scope ambiguous.
+
+**Consequences:**
+
+- one scope-aware WorldState target/API is preferred over six independent stores;
+- scope is part of validation and persistent logical identity;
+- untouched hierarchy addresses allocate no property state;
+- Section/Region/Sector property writes do not create ChunkGroups or Chunks;
+- no implicit parent->child inheritance exists unless a future explicit generic
+  mechanism defines it;
+- Sidecars store typed facts/constraints, while residency/simulation/render
+  services implement policy;
+- sparse state expressible through #20 should not create parallel stores such as
+  `PinnedChunkTable`, `FactoryChunkState` or `RegionFlags`;
+- M02 should reuse the scope-aware target for communication addressing.

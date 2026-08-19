@@ -4,14 +4,20 @@
 This complements clang-tidy: clang-tidy analyzes C++ AST/semantics, while this
 script enforces module dependency direction and reports include cycles. Rules
 are data-driven in tools/architecture_rules.json.
+
+Source-file inspection is parallel; results are merged in sorted source order so
+reports remain deterministic.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from pathlib import Path
 
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
@@ -21,7 +27,6 @@ SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".cc", ".cxx", ".inc"}
 def load_rules(path: Path):
     data = json.loads(path.read_text(encoding="utf-8"))
     modules = data["modules"]
-    # Longest prefix wins (important for src/world/* vs a future broad rule).
     modules.sort(key=lambda m: len(m["prefix"]), reverse=True)
     external_forbidden: dict[str, tuple[str, ...]] = {}
     for policy in data.get("externalIncludePolicies", []):
@@ -30,11 +35,20 @@ def load_rules(path: Path):
             external_forbidden[module_name] = external_forbidden.get(module_name, ()) + prefixes
     source_patterns = []
     for policy in data.get("sourcePatternPolicies", []):
-        source_patterns.append((set(policy.get("modules", [])),
-                                re.compile(policy["pattern"]),
-                                policy.get("message", "forbidden source pattern")))
-    return (modules, tuple(data.get("ignoreIncludePrefixes", [])),
-            int(data.get("warnCppLinesAbove", 0)), external_forbidden, source_patterns)
+        source_patterns.append(
+            (
+                set(policy.get("modules", [])),
+                re.compile(policy["pattern"]),
+                policy.get("message", "forbidden source pattern"),
+            )
+        )
+    return (
+        modules,
+        tuple(data.get("ignoreIncludePrefixes", [])),
+        int(data.get("warnCppLinesAbove", 0)),
+        external_forbidden,
+        source_patterns,
+    )
 
 
 def module_for(rel: str, modules):
@@ -83,20 +97,130 @@ def find_cycle(graph: dict[str, set[str]]) -> list[str] | None:
     return None
 
 
+@dataclass
+class SourceResult:
+    rel_source: str
+    module: str | None
+    line_count: int = 0
+    errors: list[str] = field(default_factory=list)
+    edges: list[tuple[str, str, int]] = field(default_factory=list)
+    header_basename: str | None = None
+    large_cpp: bool = False
+
+
+def inspect_source(
+    source: Path,
+    root: Path,
+    modules,
+    ignored_prefixes: tuple[str, ...],
+    warn_cpp_lines: int,
+    external_forbidden: dict[str, tuple[str, ...]],
+    source_patterns,
+    allowed: dict[str, set[str]],
+) -> SourceResult:
+    rel_source = source.relative_to(root).as_posix()
+    src_module = module_for(rel_source, modules)
+    result = SourceResult(rel_source=rel_source, module=src_module)
+    if src_module is None:
+        result.errors.append(f"unclassified source: {rel_source}")
+        return result
+
+    try:
+        text = source.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return result
+
+    lines = text.splitlines()
+    result.line_count = len(lines)
+    result.large_cpp = (
+        warn_cpp_lines > 0
+        and source.suffix in {".cpp", ".cc", ".cxx"}
+        and result.line_count > warn_cpp_lines
+    )
+    if source.suffix in {".h", ".hpp"}:
+        result.header_basename = source.name
+
+    for policy_modules, pattern, message in source_patterns:
+        if src_module not in policy_modules:
+            continue
+        match = pattern.search(text)
+        if match:
+            line_no = text.count("\n", 0, match.start()) + 1
+            result.errors.append(
+                f"forbidden source pattern in {src_module}: {rel_source}:{line_no}: {message}"
+            )
+
+    for line_no, line in enumerate(lines, start=1):
+        match = INCLUDE_RE.match(line)
+        if not match:
+            continue
+        include = match.group(1)
+        for prefix in external_forbidden.get(src_module, ()):
+            if include.startswith(prefix):
+                result.errors.append(
+                    f"forbidden external include in {src_module}: "
+                    f"{rel_source}:{line_no} includes {include}"
+                )
+                break
+        if include.startswith(ignored_prefixes):
+            continue
+        target = resolve_project_include(root, source, include)
+        if target is None:
+            continue
+        try:
+            rel_target = target.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        dst_module = module_for(rel_target, modules)
+        if dst_module is None:
+            continue
+        result.edges.append((rel_target, dst_module, line_no))
+        if dst_module not in allowed.get(src_module, set()):
+            result.errors.append(
+                f"forbidden dependency {src_module} -> {dst_module}: "
+                f"{rel_source}:{line_no} includes {include}"
+            )
+
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--rules", type=Path)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--jobs", type=int, default=max(1, min(8, os.cpu_count() or 1)))
     args = parser.parse_args()
+
+    if args.jobs < 1:
+        parser.error("--jobs must be >= 1")
 
     root = args.root.resolve()
     rules_path = (args.rules or root / "tools/architecture_rules.json").resolve()
-    modules, ignored_prefixes, warn_cpp_lines, external_forbidden, source_patterns = load_rules(rules_path)
+    modules, ignored_prefixes, warn_cpp_lines, external_forbidden, source_patterns = load_rules(
+        rules_path
+    )
     allowed = {m["name"]: set(m["mayDependOn"]) for m in modules}
 
     src_root = root / "src"
     files = sorted(p for p in src_root.rglob("*") if p.is_file() and p.suffix in SOURCE_SUFFIXES)
+
+    def scan(source: Path) -> SourceResult:
+        return inspect_source(
+            source,
+            root,
+            modules,
+            ignored_prefixes,
+            warn_cpp_lines,
+            external_forbidden,
+            source_patterns,
+            allowed,
+        )
+
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        # executor.map preserves input order; deterministic report/error ordering.
+        results = list(pool.map(scan, files))
+
     errors: list[str] = []
     graph: dict[str, set[str]] = defaultdict(set)
     file_graph: dict[str, set[str]] = defaultdict(set)
@@ -105,66 +229,21 @@ def main() -> int:
     basename_sources: dict[str, list[str]] = defaultdict(list)
     large_cpp: list[tuple[str, int]] = []
 
-    for source in files:
-        rel_source = source.relative_to(root).as_posix()
-        src_module = module_for(rel_source, modules)
-        if src_module is None:
-            errors.append(f"unclassified source: {rel_source}")
+    for result in results:
+        errors.extend(result.errors)
+        if result.module is None:
             continue
-        try:
-            text = source.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        line_count = len(text.splitlines())
-        loc_by_module[src_module] += line_count
-
-        for policy_modules, pattern, message in source_patterns:
-            if src_module not in policy_modules:
-                continue
-            match = pattern.search(text)
-            if match:
-                line_no = text.count("\n", 0, match.start()) + 1
-                errors.append(
-                    f"forbidden source pattern in {src_module}: {rel_source}:{line_no}: {message}"
-                )
-        if warn_cpp_lines > 0 and source.suffix in {".cpp", ".cc", ".cxx"} and line_count > warn_cpp_lines:
-            large_cpp.append((rel_source, line_count))
-        if source.suffix in {".h", ".hpp"}:
-            basename_sources[source.name].append(rel_source)
-
-        for line_no, line in enumerate(text.splitlines(), start=1):
-            match = INCLUDE_RE.match(line)
-            if not match:
-                continue
-            include = match.group(1)
-            for prefix in external_forbidden.get(src_module, ()):
-                if include.startswith(prefix):
-                    errors.append(
-                        f"forbidden external include in {src_module}: "
-                        f"{rel_source}:{line_no} includes {include}"
-                    )
-                    break
-            if include.startswith(ignored_prefixes):
-                continue
-            target = resolve_project_include(root, source, include)
-            if target is None:
-                # External/local-generated include. clang-tidy/compiler validates it.
-                continue
-            try:
-                rel_target = target.relative_to(root).as_posix()
-            except ValueError:
-                continue
-            dst_module = module_for(rel_target, modules)
-            if dst_module is None:
-                continue
-            file_graph[rel_source].add(rel_target)
-            graph[src_module].add(dst_module)
-            edge_examples.setdefault((src_module, dst_module), f"{rel_source}:{line_no} -> {rel_target}")
-            if dst_module not in allowed.get(src_module, set()):
-                errors.append(
-                    f"forbidden dependency {src_module} -> {dst_module}: "
-                    f"{rel_source}:{line_no} includes {include}"
-                )
+        loc_by_module[result.module] += result.line_count
+        if result.header_basename:
+            basename_sources[result.header_basename].append(result.rel_source)
+        if result.large_cpp:
+            large_cpp.append((result.rel_source, result.line_count))
+        for rel_target, dst_module, line_no in result.edges:
+            file_graph[result.rel_source].add(rel_target)
+            graph[result.module].add(dst_module)
+            edge_examples.setdefault(
+                (result.module, dst_module), f"{result.rel_source}:{line_no} -> {rel_target}"
+            )
 
     for name, paths in sorted(basename_sources.items()):
         if len(paths) > 1:
@@ -181,7 +260,12 @@ def main() -> int:
     if file_cycle:
         errors.append("project include cycle: " + " -> ".join(file_cycle))
 
-    report_lines = ["Omnigrid architecture report", "", "Modules / source LOC:"]
+    report_lines = [
+        "Omnigrid architecture report",
+        f"Parallel source scan jobs: {args.jobs}",
+        "",
+        "Modules / source LOC:",
+    ]
     for name in sorted(loc_by_module):
         report_lines.append(f"  {name:18s} {loc_by_module[name]:6d}")
     report_lines += ["", "Large translation units (refactor warning only):"]

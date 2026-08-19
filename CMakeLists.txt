@@ -135,13 +135,15 @@ set_target_properties(omnigrid_chunk PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQ
 target_link_libraries(omnigrid_chunk PUBLIC omnigrid_world omnigrid_worldgen)
 
 add_library(omnigrid_interaction STATIC
-  src/world/interaction/BlockPicker.cpp)
+  src/world/interaction/BlockPicker.cpp
+  src/world/interaction/PlayerInteractionController.cpp)
 target_include_directories(omnigrid_interaction PUBLIC src)
 set_target_properties(omnigrid_interaction PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_link_libraries(omnigrid_interaction PUBLIC omnigrid_chunk)
+target_link_libraries(omnigrid_interaction PUBLIC omnigrid_chunk omnigrid_communication)
 
 add_library(omnigrid_state STATIC
   src/world/state/WorldState.cpp
+  src/world/state/HierarchySidecarStore.cpp
   src/world/state/MemoryPersistenceSink.cpp)
 target_include_directories(omnigrid_state PUBLIC src)
 set_target_properties(omnigrid_state PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
@@ -158,6 +160,24 @@ add_library(omnigrid_mesh STATIC
 target_include_directories(omnigrid_mesh PUBLIC src)
 set_target_properties(omnigrid_mesh PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 target_link_libraries(omnigrid_mesh PUBLIC omnigrid_chunk)
+
+add_library(omnigrid_communication STATIC
+  src/world/communication/CommunicationEnvelope.cpp
+  src/world/communication/CommunicationRouter.cpp
+  src/world/communication/CommunicationRegistries.cpp
+  src/world/communication/CommunicationRuntime.cpp
+  src/world/communication/DelayedMessageScheduler.cpp
+  src/world/communication/BlockCommandHandlers.cpp)
+target_include_directories(omnigrid_communication PUBLIC src)
+set_target_properties(omnigrid_communication PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(omnigrid_communication PUBLIC omnigrid_state)
+
+add_library(omnigrid_scripting STATIC
+  src/world/scripting/GameplayLuaRuntime.cpp
+  src/world/scripting/GameplayContentRuntime.cpp)
+target_include_directories(omnigrid_scripting PUBLIC src)
+set_target_properties(omnigrid_scripting PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(omnigrid_scripting PUBLIC omnigrid_communication omnigrid_worldgen PRIVATE "${OMNIGRID_LUA_LIBRARY}")
 
 add_library(omnigrid_debug STATIC
   src/debug/DebugHudFormatter.cpp)
@@ -200,7 +220,8 @@ if(OMNIGRID_BUILD_APP)
     omnigrid_interaction
     omnigrid_camera
     omnigrid_dynamic
-    omnigrid_spatial_bridge)
+    omnigrid_spatial_bridge
+    omnigrid_scripting)
 
   # Content root contract: the app resolves MODS next to its own binary
   # first (see config::contentRootCandidates). Keep a symlink in the build
@@ -255,6 +276,50 @@ target_include_directories(test_world_state PRIVATE src)
 target_compile_definitions(test_world_state PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
 target_link_libraries(test_world_state PRIVATE omnigrid_state)
 add_test(NAME world_state COMMAND test_world_state)
+
+add_executable(test_hierarchy_sidecars tests/TestHierarchySidecars.cpp)
+target_include_directories(test_hierarchy_sidecars PRIVATE src)
+target_compile_definitions(test_hierarchy_sidecars PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
+target_link_libraries(test_hierarchy_sidecars PRIVATE omnigrid_state)
+add_test(NAME hierarchy_sidecars COMMAND test_hierarchy_sidecars)
+
+add_executable(test_communication tests/TestCommunication.cpp)
+target_include_directories(test_communication PRIVATE src)
+target_link_libraries(test_communication PRIVATE omnigrid_communication)
+add_test(NAME communication COMMAND test_communication)
+
+add_executable(test_router tests/TestRouter.cpp)
+target_include_directories(test_router PRIVATE src)
+target_compile_definitions(test_router PRIVATE OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
+target_link_libraries(test_router PRIVATE omnigrid_communication omnigrid_state)
+add_test(NAME router COMMAND test_router)
+
+add_executable(test_m03_router tests/TestM03Router.cpp)
+target_include_directories(test_m03_router PRIVATE src)
+target_link_libraries(test_m03_router PRIVATE omnigrid_communication)
+add_test(NAME m03_router COMMAND test_m03_router)
+
+add_executable(test_m03_scheduler tests/TestM03Scheduler.cpp)
+target_include_directories(test_m03_scheduler PRIVATE src)
+target_link_libraries(test_m03_scheduler PRIVATE omnigrid_communication)
+add_test(NAME m03_scheduler COMMAND test_m03_scheduler)
+
+add_executable(test_m03_gameplay_lua tests/TestM03GameplayLua.cpp)
+target_include_directories(test_m03_gameplay_lua PRIVATE src)
+target_link_libraries(test_m03_gameplay_lua PRIVATE omnigrid_scripting omnigrid_state omnigrid_chunk)
+add_test(NAME m03_gameplay_lua COMMAND test_m03_gameplay_lua)
+
+add_executable(test_m03_round4 tests/TestM03Round4.cpp)
+target_include_directories(test_m03_round4 PRIVATE src)
+target_compile_definitions(test_m03_round4 PRIVATE
+  OMNIGRID_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/MODS/Default")
+target_link_libraries(test_m03_round4 PRIVATE omnigrid_scripting omnigrid_state omnigrid_chunk)
+add_test(NAME m03_round4 COMMAND test_m03_round4)
+
+add_executable(test_interaction_flow tests/TestInteractionFlow.cpp)
+target_include_directories(test_interaction_flow PRIVATE src)
+target_link_libraries(test_interaction_flow PRIVATE omnigrid_communication omnigrid_interaction omnigrid_state)
+add_test(NAME interaction_flow COMMAND test_interaction_flow)
 
 add_executable(test_worldgen tests/TestWorldGen.cpp)
 target_include_directories(test_worldgen PRIVATE src)
@@ -327,6 +392,7 @@ add_executable(test_block_picker tests/TestBlockPicker.cpp)
 target_include_directories(test_block_picker PRIVATE src)
 target_link_libraries(test_block_picker PRIVATE omnigrid_interaction)
 add_test(NAME block_picker COMMAND test_block_picker)
+set_tests_properties(block_picker PROPERTIES TIMEOUT 60)
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)

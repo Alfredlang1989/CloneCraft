@@ -20,6 +20,8 @@ namespace input
         using ResizeCallback = std::function<void(int, int)>;
         using KeyCallback = std::function<void( int scancode, bool pressed )>;
         using MouseMotionCallback = std::function<void( float dx, float dy )>;
+        /** M02-D: mouse button edges (button 1 = primary, 3 = secondary). */
+        using MouseButtonCallback = std::function<void( int button, bool pressed )>;
 
         InputManager() = default;
 
@@ -27,6 +29,7 @@ namespace input
         void setOnResize( ResizeCallback callback );
         void setOnKey( KeyCallback callback );
         void setOnMouseMotion( MouseMotionCallback callback );
+        void setOnMouseButton( MouseButtonCallback callback );
 
         /** Raw pressed-state snapshot addressed by SDL scancode. */
         bool isKeyDown( int scancode ) const
@@ -37,6 +40,16 @@ namespace input
         }
         void setKeyDown( int scancode, bool pressed );
 
+        /** Pressed-state snapshot addressed by SDL mouse button (1=left,
+         *  2=middle, 3=right). */
+        bool isMouseButtonDown( int button ) const
+        {
+            return button >= 0 && button < static_cast<int>( mButtons.size() )
+                       ? mButtons[static_cast<std::size_t>( button )] != 0
+                       : false;
+        }
+        void setMouseButton( int button, bool pressed );
+
         void pollEvents();
 
     private:
@@ -44,6 +57,8 @@ namespace input
         ResizeCallback mOnResize;
         KeyCallback mOnKey;
         MouseMotionCallback mOnMouseMotion;
+        MouseButtonCallback mOnMouseButton;
         std::array<unsigned char, SDL_SCANCODE_COUNT> mKeys{};
+        std::array<unsigned char, 8> mButtons{}; // SDL button 1..7
     };
 } // namespace input
