@@ -8,8 +8,10 @@ Detailed acceptance requirements live in `docs/milestones/Mxx.md`.
 
 A `/loop` handles exactly one milestone candidate. Internal implementation
 steps are not review/status milestones. Do not stop for artificial "Round 1 / 2
-/ 3" checkpoints. At the end of the selected milestone the independent reviewer
-runs; after PASS the loop stops rather than automatically starting the next M.
+/ 3" checkpoints. The loop plans, builds and independently reviews that one
+candidate. On dual PASS it marks exactly that milestone `ACCEPTED`, creates the
+terminal backup and stops. The next `/loop` invocation selects the next eligible
+milestone; the current invocation never starts it.
 
 Historical milestone numbers in old ADR prose do not define current ordering.
 
@@ -19,7 +21,7 @@ Historical milestone numbers in old ADR prose do not define current ordering.
 |---|---|---|---|
 | M01 WorldState + hierarchical Sidecar foundation | ACCEPTED | baseline | implemented baseline |
 | M02 Communication foundation + block interaction | ACCEPTED | M01 | implemented baseline |
-| M03 Router + gameplay Lua + scheduler + two-block proof | REVIEW PENDING | M02 | `docs/milestones/M03.md` |
+| M03 Router + gameplay Lua + scheduler + two-block proof | ACCEPTED | M02 | `docs/milestones/M03.md` |
 | M04 enTT hot-state projection | OPEN | accepted M03 | `docs/milestones/M04.md` |
 | M05 RocksDB persistence | OPEN | M04 | `docs/milestones/M05.md` |
 | M06 Embedded client/server | OPEN | M05 | `docs/milestones/M06.md` |
@@ -27,9 +29,11 @@ Historical milestone numbers in old ADR prose do not define current ordering.
 | M08 Construction blueprints/jobs | OPEN | M07 | `docs/milestones/M08.md` |
 | M10 Hierarchical fast travel | OPEN | M08 (ordering only) | `docs/milestones/M10.md` |
 
-`docs/ACTIVE_FINDINGS.md` contains the currently known M03 review blockers.
-Once a milestone is externally accepted, this roadmap is the only status file
-that needs to be advanced. Do not create another status ledger.
+`docs/ACTIVE_FINDINGS.md` contains only unresolved blockers for the currently
+selected milestone, when any exist. This roadmap is the only status authority.
+`tools/milestone_state.py` is the harness's sole status mutator; it can accept
+only the currently eligible milestone and cannot skip dependencies. Do not
+create another status ledger.
 
 ## Main dependency spine
 

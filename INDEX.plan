@@ -19,9 +19,10 @@ because they exist.
 
 ## Current main spine
 
-M01 accepted -> M02 accepted -> M03 review pending -> M04 enTT -> M05 RocksDB ->
-M06 embedded client/server -> M07 construction -> M08 blueprints ->
-M10 hierarchical fast travel.
+M01 -> M02 -> M03 -> M04 -> M05 -> M06 -> M07 -> M08 -> M10.
+
+Current state is read only from `docs/ROADMAP.md`; this navigation file never
+duplicates milestone status.
 
 One `/loop` handles one milestone candidate. Internal implementation steps are
 not separate public review rounds.
