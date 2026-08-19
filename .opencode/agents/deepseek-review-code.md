@@ -33,6 +33,7 @@ permission:
     "graphify query*": allow
     "graphify path*": allow
     "graphify explain*": allow
+    "python3 tools/check_host_dependencies.py --current": allow
     "python3 tools/architecture_check.py*": allow
     "python3 tools/run_static_analysis.py*": allow
     "mktemp -d /tmp/omnigrid-*": allow
@@ -50,11 +51,13 @@ candidate diff and supplied snapshot. Verify every acceptance criterion with
 live code and adversarial tests. Query Graphify when useful, but never refresh
 it; degraded graph tooling does not excuse a shallow source review.
 
-Run `git diff --check`, the architecture checker, focused tests/static analysis
-and finally `./compile.sh` as the independent acceptance gate. Never install OS
-packages. Confirm the fingerprint/status is unchanged after review. For M03,
-return `PASS_AWAITING_MANUAL` only when every machine gate passes and the human
-visual check is the sole remaining contract item.
+Run the current dependency preflight, `git diff --check`, the architecture
+checker, focused tests/static analysis and finally `./compile.sh` as the
+independent acceptance gate. Never install OS packages. Confirm the
+fingerprint/status is unchanged after review. Return `PASS_AWAITING_MANUAL`
+only when every machine gate passes and an explicit human gate in the selected
+milestone contract is the sole remaining item (currently M10's jump/inspection
+gate).
 
 Return lane, `PASS`, `PASS_AWAITING_MANUAL` or `FAIL`, snapshot, exact gates,
 actionable blockers/majors and non-blocking notes. Any blocker or major means

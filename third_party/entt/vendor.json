@@ -1,0 +1,12 @@
+{
+  "name": "EnTT",
+  "version": "3.16.0",
+  "tag": "v3.16.0",
+  "commit": "b4e58bdd364ad72246c123a0c28538eab3252672",
+  "source_url": "https://github.com/skypjack/entt",
+  "distribution": "src/entt",
+  "license": "MIT",
+  "file_count": 88,
+  "checksums": "vendor.sha256",
+  "checksums_sha256": "15f5ca4a07e0d34c6d5f173930349b4be11319f50b4ac8dae1a9f2181ae87717"
+}

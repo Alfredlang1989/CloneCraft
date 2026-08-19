@@ -36,6 +36,7 @@ else()
 endif()
 
 find_package(Threads REQUIRED)
+include(cmake/OmnigridThirdParty.cmake)
 
 # Header-only nlohmann/json is intentionally vendored. Omnigrid must build
 # identically whether or not the host has a distro nlohmann-json package.
@@ -381,6 +382,10 @@ add_test(NAME camera COMMAND test_camera)
 add_executable(test_dynamic_space tests/TestDynamicSpace.cpp)
 target_link_libraries(test_dynamic_space PRIVATE omnigrid_dynamic omnigrid_spatial_bridge)
 add_test(NAME dynamic_space COMMAND test_dynamic_space)
+
+add_executable(test_third_party_entt tests/TestThirdPartyEnTT.cpp)
+target_link_libraries(test_third_party_entt PRIVATE EnTT::EnTT)
+add_test(NAME third_party_entt COMMAND test_third_party_entt)
 
 add_executable(test_ui_config tests/TestUiConfig.cpp)
 target_include_directories(test_ui_config PRIVATE src)

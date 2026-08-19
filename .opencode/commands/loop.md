@@ -19,6 +19,10 @@ STATUS:
 !`git status --short --branch`
 CURRENT MILESTONE:
 !`python3 tools/milestone_state.py --current`
+REMAINING ACCEPTANCE CHAIN:
+!`python3 tools/milestone_state.py --verify-chain`
+DEPENDENCY PREFLIGHT:
+!`python3 tools/check_host_dependencies.py --current`
 UNSTAGED DIFF STAT:
 !`git diff --stat`
 STAGED DIFF STAT:
@@ -34,11 +38,12 @@ Additional operator constraint:
 $ARGUMENTS
 
 Do not start the following milestone. Emit one compact `MILESTONE_PLAN`, then
-send an `OPEN` candidate to @deepseek-builder. A `REVIEW PENDING` candidate is
-reviewed before further builder work. After every builder pass the primary
-orchestrator refreshes Graphify once, then dispatches @deepseek-review-code and
-@deepseek-review-architecture against the same snapshot. Findings go back to
-the builder in bounded cycles.
+send an `OPEN` candidate to @deepseek-builder. After a successful builder pass,
+mark that exact candidate with `python3 tools/milestone_state.py --mark-review-pending Mxx`,
+refresh Graphify once, then dispatch
+@deepseek-review-code and @deepseek-review-architecture against the same
+snapshot. A pre-existing `REVIEW PENDING` candidate is reviewed before further
+builder work. Findings go back to the builder in bounded cycles.
 
 On dual PASS, finalize exactly the selected M with
 `python3 tools/milestone_state.py --accept Mxx`; that controlled transition

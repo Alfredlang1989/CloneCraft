@@ -13,6 +13,12 @@ candidate. On dual PASS it marks exactly that milestone `ACCEPTED`, creates the
 terminal backup and stops. The next `/loop` invocation selects the next eligible
 milestone; the current invocation never starts it.
 
+The controlled lifecycle is `OPEN -> REVIEW PENDING -> ACCEPTED`. The primary
+orchestrator marks `REVIEW PENDING` immediately after a completed builder pass.
+This makes an interrupted next invocation review the existing candidate instead
+of rebuilding it. Only `tools/milestone_state.py` may perform either transition;
+its chain verifier must always reach `COMPLETE` without skipping a dependency.
+
 Historical milestone numbers in old ADR prose do not define current ordering.
 
 ## Current main sequence
@@ -32,8 +38,8 @@ Historical milestone numbers in old ADR prose do not define current ordering.
 `docs/ACTIVE_FINDINGS.md` contains only unresolved blockers for the currently
 selected milestone, when any exist. This roadmap is the only status authority.
 `tools/milestone_state.py` is the harness's sole status mutator; it can accept
-only the currently eligible milestone and cannot skip dependencies. Do not
-create another status ledger.
+only the currently eligible review-pending milestone and cannot skip
+dependencies. Do not create another status ledger.
 
 ## Main dependency spine
 

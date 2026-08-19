@@ -33,6 +33,8 @@ for required_file in \
     .opencode/agents/deepseek-review-architecture.md \
     docs/ROADMAP.md \
     tools/milestone_state.py \
+    tools/check_host_dependencies.py \
+    tools/create_workcontainer_zip.sh \
     tools/validate_opencode_harness.py; do
     [[ -f "$required_file" ]] || die "required harness file missing: $required_file"
 done

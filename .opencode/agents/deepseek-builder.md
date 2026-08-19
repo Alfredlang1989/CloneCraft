@@ -41,6 +41,7 @@ permission:
     "graphify query*": allow
     "graphify path*": allow
     "graphify explain*": allow
+    "python3 tools/check_host_dependencies.py --current": allow
     "python3 tools/architecture_check.py*": allow
     "python3 tools/run_static_analysis.py*": allow
     "mktemp -d /tmp/omnigrid-*": allow
@@ -55,7 +56,8 @@ the exact task packet; do not start adjacent work.
 
 1. Follow `AGENTS.md`, read `docs/ARCHITECTURE.md` and the selected milestone
    completely, then only the packet's relevant references and live code.
-2. Record status and diffs. Preserve every unrelated change. Never mutate Git,
+2. Record status, diffs and the current dependency preflight. Preserve every
+   unrelated change. Never mutate Git,
    canonical planning/architecture documents, harness files or acceptance
    rules, and never install or modify OS packages.
 3. Verify each finding in source/tests before editing. Make the smallest
@@ -65,7 +67,8 @@ the exact task packet; do not start adjacent work.
    deterministic architecture checker. Never refresh or rebuild its graph.
 5. Do not run `compile.sh`; that is the independent code reviewer's final gate.
    Use fresh out-of-tree targeted builds/tests, architecture checks and static
-   analysis when available. Report missing dependencies exactly.
+   analysis when available. Report missing dependencies exactly; never vendor,
+   download or install RocksDB because it is a host-owned M05 dependency.
 6. Re-read every changed file and final diff. Return evidence to the primary
    orchestrator; do not claim final acceptance.
 

@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 
@@ -77,10 +77,13 @@ def dependency_ids(milestone: Milestone) -> tuple[str, ...]:
 
 def validate_sequence(milestones: list[Milestone]) -> None:
     identifiers = {milestone.identifier for milestone in milestones}
+    positions = {milestone.identifier: index
+                 for index, milestone in enumerate(milestones)}
     seen_nonaccepted = False
+    seen_open = False
     review_pending = 0
 
-    for milestone in milestones:
+    for index, milestone in enumerate(milestones):
         if milestone.state == "ACCEPTED":
             if seen_nonaccepted:
                 raise StateError(
@@ -89,11 +92,22 @@ def validate_sequence(milestones: list[Milestone]) -> None:
         else:
             seen_nonaccepted = True
         if milestone.state == "REVIEW PENDING":
+            if seen_open:
+                raise StateError(
+                    f"review-pending milestone skips earlier open work: "
+                    f"{milestone.identifier}"
+                )
             review_pending += 1
+        elif milestone.state == "OPEN":
+            seen_open = True
         for dependency in dependency_ids(milestone):
             if dependency not in identifiers:
                 raise StateError(
                     f"{milestone.identifier} references unknown dependency {dependency}"
+                )
+            if positions[dependency] >= index:
+                raise StateError(
+                    f"{milestone.identifier} has non-prior dependency {dependency}"
                 )
 
     if review_pending > 1:
@@ -128,6 +142,32 @@ def print_milestone(prefix: str, milestone: Milestone | None) -> None:
     print(f"{prefix}_CONTRACT={milestone.contract}")
 
 
+def replace_state(milestones: list[Milestone], identifier: str,
+                  state: str) -> list[Milestone]:
+    updated = [replace(milestone, state=state)
+               if milestone.identifier == identifier else milestone
+               for milestone in milestones]
+    validate_sequence(updated)
+    return updated
+
+
+def acceptance_chain(milestones: list[Milestone]) -> list[str]:
+    simulated = list(milestones)
+    chain: list[str] = []
+    while True:
+        current = current_milestone(simulated)
+        if current is None:
+            break
+        chain.append(current.identifier)
+        if current.state == "OPEN":
+            simulated = replace_state(
+                simulated, current.identifier, "REVIEW PENDING")
+        simulated = replace_state(simulated, current.identifier, "ACCEPTED")
+    if any(milestone.state != "ACCEPTED" for milestone in simulated):
+        raise StateError("acceptance-chain simulation did not reach COMPLETE")
+    return chain
+
+
 def atomic_write(path: Path, text: str) -> None:
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent, prefix=f".{path.name}.", text=True
@@ -144,6 +184,52 @@ def atomic_write(path: Path, text: str) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def update_roadmap_state(lines: list[str], milestone: Milestone,
+                         new_state: str) -> str:
+    cells = list(milestone.cells)
+    cells[1] = new_state
+    newline = "\n" if lines[milestone.line_index].endswith("\n") else ""
+    lines[milestone.line_index] = "| " + " | ".join(cells) + " |" + newline
+    updated = "".join(lines)
+    parse_roadmap(updated)
+    return updated
+
+
+def mark_review_pending(identifier: str, dry_run: bool) -> None:
+    if MILESTONE_ID.fullmatch(identifier) is None:
+        raise StateError(f"invalid milestone id: {identifier}")
+    text = ROADMAP.read_text(encoding="utf-8")
+    lines, milestones = parse_roadmap(text)
+    current = current_milestone(milestones)
+    if current is None:
+        raise StateError("all milestones are already accepted")
+    if current.identifier != identifier:
+        raise StateError(
+            f"cannot mark {identifier}; current milestone is {current.identifier}"
+        )
+    if current.state == "REVIEW PENDING":
+        print(f"REVIEW_PENDING_MILESTONE={identifier}")
+        print("PREVIOUS_STATE=REVIEW PENDING")
+        print("NEW_STATE=REVIEW PENDING")
+        print("WRITE=NO")
+        print("ALREADY_PENDING=YES")
+        return
+    if current.state != "OPEN":
+        raise StateError(
+            f"cannot mark {identifier} review-pending from {current.state}"
+        )
+
+    updated = update_roadmap_state(lines, current, "REVIEW PENDING")
+    if not dry_run:
+        atomic_write(ROADMAP, updated)
+
+    print(f"REVIEW_PENDING_MILESTONE={identifier}")
+    print(f"PREVIOUS_STATE={current.state}")
+    print("NEW_STATE=REVIEW PENDING")
+    print(f"WRITE={'NO' if dry_run else 'YES'}")
+    print("ALREADY_PENDING=NO")
+
+
 def accept(identifier: str, dry_run: bool) -> None:
     if MILESTONE_ID.fullmatch(identifier) is None:
         raise StateError(f"invalid milestone id: {identifier}")
@@ -156,12 +242,13 @@ def accept(identifier: str, dry_run: bool) -> None:
         raise StateError(
             f"cannot accept {identifier}; current milestone is {current.identifier}"
         )
+    if current.state != "REVIEW PENDING":
+        raise StateError(
+            f"cannot accept {identifier} from {current.state}; "
+            "mark it REVIEW PENDING after implementation first"
+        )
 
-    cells = list(current.cells)
-    cells[1] = "ACCEPTED"
-    newline = "\n" if lines[current.line_index].endswith("\n") else ""
-    lines[current.line_index] = "| " + " | ".join(cells) + " |" + newline
-    updated = "".join(lines)
+    updated = update_roadmap_state(lines, current, "ACCEPTED")
     _, updated_milestones = parse_roadmap(updated)
     next_milestone = current_milestone(updated_milestones)
 
@@ -210,12 +297,16 @@ def main() -> int:
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--current", action="store_true")
     action.add_argument("--state", metavar="MXX")
+    action.add_argument("--mark-review-pending", metavar="MXX")
     action.add_argument("--accept", metavar="MXX")
+    action.add_argument("--verify-chain", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    if args.dry_run and args.accept is None:
-        parser.error("--dry-run is valid only with --accept")
+    if args.dry_run and args.accept is None and args.mark_review_pending is None:
+        parser.error(
+            "--dry-run is valid only with --accept or --mark-review-pending"
+        )
 
     try:
         text = ROADMAP.read_text(encoding="utf-8")
@@ -230,8 +321,15 @@ def main() -> int:
             print(f"STATE={match.state}")
             print(f"DEPENDENCY={match.dependency}")
             print(f"CONTRACT={match.contract}")
-        else:
+        elif args.mark_review_pending is not None:
+            mark_review_pending(args.mark_review_pending, args.dry_run)
+        elif args.accept is not None:
             accept(args.accept, args.dry_run)
+        else:
+            chain = acceptance_chain(milestones)
+            print(f"ACCEPTANCE_CHAIN={'>'.join(chain) if chain else 'COMPLETE'}")
+            print(f"MILESTONE_COUNT={len(chain)}")
+            print("FINAL_MILESTONE=COMPLETE")
         return 0
     except (OSError, StateError) as exc:
         print(f"MILESTONE_STATE_ERROR: {exc}", file=sys.stderr)

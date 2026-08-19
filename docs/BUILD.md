@@ -12,6 +12,24 @@ If SDL3, OgreNext, OgreNext-HLMS, OgreNext-Overlay or another required system de
 the configure/build stops with the dependency error. `nlohmann/json.hpp` is vendored under
 `third_party/nlohmann/` and is not a host dependency.
 
+## M04/M05 dependencies
+
+EnTT v3.16.0 is pinned as its official modular header distribution under
+`third_party/entt/`. Its upstream commit, MIT license and SHA-256 inventory live
+in `third_party/entt/vendor.json`. CMake exposes it as `EnTT::EnTT`; no EnTT OS
+package or network fetch is used.
+
+RocksDB is deliberately host-provided. M05 and every later milestone require
+RocksDB development files version 8.9.0 or newer. On Ubuntu 24.04 Noble,
+`librocksdb-dev` supplies the headers, link library, CMake/pkg-config metadata
+and the matching `librocksdb8.9` runtime dependency. OmniGrid never vendors,
+downloads or installs RocksDB. CMake exposes a detected host installation as
+`OmniGrid::RocksDB`; M05 must make the backend target require it.
+
+`python3 tools/check_host_dependencies.py --current` is the milestone-aware
+preflight. A missing RocksDB installation is informational during M04 and a
+hard stop when M05 is selected.
+
 Useful variants:
 
 ```bash

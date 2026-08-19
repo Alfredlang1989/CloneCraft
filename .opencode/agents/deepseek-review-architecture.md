@@ -33,6 +33,7 @@ permission:
     "graphify query*": allow
     "graphify path*": allow
     "graphify explain*": allow
+    "python3 tools/check_host_dependencies.py --current": allow
     "python3 tools/architecture_check.py*": allow
 ---
 
@@ -43,7 +44,8 @@ evidence.
 Read `AGENTS.md`, the complete architecture and selected milestone, then inspect
 the live diff, source, tests, CMake and architecture rules. Check ownership,
 threading, lifetime, dependency direction, public boundaries, single-authority
-paths and forbidden shortcuts. Run the deterministic architecture checker and
+paths and forbidden shortcuts. Confirm the current dependency preflight. Run
+the deterministic architecture checker and
 focused Graphify query/path/explain operations. If the graph is unavailable or
 stale, record degraded evidence and continue with direct source/include/CMake
 analysis. A green test never overrules an architecture violation.
